@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pwa-dist",
+      "runtimeExecutable": "C:/Program Files/nodejs/node.exe",
+      "runtimeArgs": ["scripts/serve-dist.mjs"],
+      "port": 4173,
+      "url": "http://localhost:4173"
+    }
+  ]
+}
