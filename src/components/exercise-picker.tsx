@@ -86,7 +86,7 @@ export function ExercisePicker({
         value={query}
         onChangeText={setQuery}
         autoCorrect={false}
-        containerStyle={{ flex: 0 }}
+        full
       />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>

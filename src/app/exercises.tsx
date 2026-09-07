@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { useDialog } from '@/components/dialog';
 import { Button, Chip, Field, IconButton, Row, Screen, Sheet, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -11,6 +12,7 @@ import { describeExercise, KIND_LABEL, type ExerciseKind } from '@/lib/types';
 
 export default function ExercisesScreen() {
   const c = useTheme();
+  const { confirm } = useDialog();
   const { exercises, sessions, routines, addExercise, deleteExercise } = useStore();
 
   const [query, setQuery] = useState('');
@@ -32,18 +34,18 @@ export default function ExercisesScreen() {
     sessions.filter((s) => s.entries.some((e) => e.exerciseId === exerciseId)).length +
     routines.filter((r) => r.items.some((i) => i.exerciseId === exerciseId)).length;
 
-  const confirmDelete = (id: string, label: string) => {
+  const confirmDelete = async (id: string, label: string) => {
     const uses = usageCount(id);
-    Alert.alert(
-      'Borrar ejercicio',
-      uses > 0
-        ? `«${label}» aparece en ${uses} rutinas o entrenos. Se borra del catálogo, pero lo ya registrado se conserva.`
-        : `¿Borrar «${label}» del catálogo?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Borrar', style: 'destructive', onPress: () => deleteExercise(id) },
-      ],
-    );
+    const ok = await confirm({
+      title: `Borrar «${label}»`,
+      message:
+        uses > 0
+          ? `Aparece en ${uses} rutinas o entrenos. Se borra del catálogo, pero lo ya registrado se conserva.`
+          : 'Se borra del catálogo de ejercicios.',
+      confirmText: 'Borrar',
+      destructive: true,
+    });
+    if (ok) deleteExercise(id);
   };
 
   const create = () => {
@@ -64,7 +66,7 @@ export default function ExercisesScreen() {
           value={query}
           onChangeText={setQuery}
           autoCorrect={false}
-          containerStyle={{ flex: 0 }}
+          full
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
@@ -122,10 +124,10 @@ export default function ExercisesScreen() {
           value={name}
           onChangeText={setName}
           autoFocus
-          containerStyle={{ flex: 0 }}
+          full
         />
 
-        <Text variant="caption" dim style={{ textTransform: 'uppercase' }}>
+        <Text variant="overline" faint>
           Tipo de registro
         </Text>
         <Row gap={Spacing.two}>
@@ -141,7 +143,7 @@ export default function ExercisesScreen() {
               : 'Registrarás solo la duración de cada serie.'}
         </Text>
 
-        <Text variant="caption" dim style={{ textTransform: 'uppercase', marginTop: Spacing.two }}>
+        <Text variant="overline" faint style={{ marginTop: Spacing.two }}>
           Grupo
         </Text>
         <Row style={{ flexWrap: 'wrap', gap: Spacing.two }}>

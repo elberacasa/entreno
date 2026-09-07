@@ -1,7 +1,8 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
+import { useDialog } from '@/components/dialog';
 import { ExercisePicker } from '@/components/exercise-picker';
 import { Button, Card, EmptyState, Field, IconButton, Row, Screen, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -22,8 +23,20 @@ import type { PlanItem, Routine } from '@/lib/types';
 export default function RoutineEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const store = useStore();
+
+  // El editor arranca copiando la rutina a un borrador. Si se monta antes de
+  // que el almacén termine de cargar (al recargar la app en esta pantalla) la
+  // copiaría vacía y «Guardar» borraría la rutina de verdad.
+  if (!store.ready) return <Screen />;
+
+  return <RoutineEditor id={String(id)} />;
+}
+
+function RoutineEditor({ id }: { id: string }) {
+  const store = useStore();
+  const { confirm, notify } = useDialog();
   const isNew = id === 'new';
-  const existing = isNew ? undefined : store.routineById(String(id));
+  const existing = isNew ? undefined : store.routineById(id);
 
   const [draft, setDraft] = useState<Routine>(() => {
     if (existing) return { ...existing, items: existing.items.map((i) => ({ ...i })) };
@@ -58,32 +71,33 @@ export default function RoutineEditorScreen() {
     });
   };
 
-  const save = () => {
+  const save = async () => {
     const name = draft.name.trim();
     if (!name) {
-      Alert.alert('Falta el nombre', 'Ponle un nombre a la rutina para poder guardarla.');
+      await notify({
+        title: 'Falta el nombre',
+        message: 'Ponle un nombre a la rutina para poder guardarla.',
+      });
       return;
     }
     if (draft.items.length === 0) {
-      Alert.alert('Rutina vacía', 'Añade al menos un ejercicio.');
+      await notify({ title: 'Rutina vacía', message: 'Añade al menos un ejercicio.' });
       return;
     }
     store.upsertRoutine({ ...draft, name });
     router.back();
   };
 
-  const remove = () => {
-    Alert.alert('Borrar rutina', `¿Borrar «${draft.name || 'sin nombre'}»?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Borrar',
-        style: 'destructive',
-        onPress: () => {
-          store.deleteRoutine(draft.id);
-          router.back();
-        },
-      },
-    ]);
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Borrar «${draft.name || 'sin nombre'}»`,
+      message: 'La rutina desaparece. Los entrenos que ya hiciste con ella se conservan.',
+      confirmText: 'Borrar rutina',
+      destructive: true,
+    });
+    if (!ok) return;
+    store.deleteRoutine(draft.id);
+    router.back();
   };
 
   return (
@@ -92,7 +106,8 @@ export default function RoutineEditorScreen() {
         options={{
           title: isNew ? 'Nueva rutina' : 'Editar rutina',
           headerRight: () => (
-            <Pressable onPress={save} hitSlop={8}>
+            // El padding aparta el texto del borde: sin él la cabecera lo corta.
+            <Pressable onPress={save} hitSlop={8} style={{ paddingHorizontal: Spacing.three }}>
               <Text variant="label" accent>
                 Guardar
               </Text>
@@ -114,7 +129,7 @@ export default function RoutineEditorScreen() {
               placeholder="Ej. Torso A, Pierna pesada, Fondo largo"
               value={draft.name}
               onChangeText={(name) => setDraft((d) => ({ ...d, name }))}
-              containerStyle={{ flex: 0 }}
+              full
             />
             <Field
               label="Notas"
@@ -122,7 +137,7 @@ export default function RoutineEditorScreen() {
               value={draft.notes ?? ''}
               onChangeText={(notes) => setDraft((d) => ({ ...d, notes }))}
               multiline
-              containerStyle={{ flex: 0 }}
+              full
             />
             <Text variant="caption" dim>
               {exercisesLabel(draft.items.length)} · {setsLabel(totalSets)} planificadas
@@ -230,7 +245,7 @@ export default function RoutineEditorScreen() {
                     placeholder={formatDuration(store.settings.defaultRestSec)}
                     defaultValue={item.restSec != null ? formatDuration(item.restSec) : ''}
                     onChangeText={(v) => patchItem(item.id, { restSec: parseDuration(v) })}
-                    containerStyle={{ flex: 0 }}
+                    full
                   />
                 </Card>
               );

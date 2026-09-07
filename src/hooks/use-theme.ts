@@ -1,7 +1,9 @@
-import { Colors, type Palette } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useContext } from 'react';
 
+import { ThemeContext } from '@/components/theme-provider';
+import type { Palette } from '@/constants/theme';
+
+/** Paleta activa. La decide `AppThemeProvider`, una sola vez para toda la app. */
 export function useTheme(): Palette {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? Colors.dark : Colors.light;
+  return useContext(ThemeContext);
 }

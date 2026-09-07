@@ -1,9 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
-import { Button, Card, EmptyState, IconButton, Row, Screen, SectionHeader, Text } from '@/components/ui';
+import { useDialog } from '@/components/dialog';
+import {
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Row,
+  Screen,
+  ScreenTitle,
+  SectionHeader,
+  Text,
+} from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
 import { exercisesLabel, plural, setsLabel } from '@/lib/format';
 import { useStore } from '@/lib/store';
@@ -11,44 +24,63 @@ import type { Routine } from '@/lib/types';
 
 export default function RoutinesScreen() {
   const c = useTheme();
+  const bottomPadding = useTabBarPadding();
+  const { confirm } = useDialog();
   const { routines, exerciseById, deleteRoutine, duplicateRoutine, startSession, activeSession } =
     useStore();
 
-  const confirmDelete = (r: Routine) => {
-    Alert.alert('Borrar rutina', `¿Seguro que quieres borrar «${r.name}»?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Borrar', style: 'destructive', onPress: () => deleteRoutine(r.id) },
-    ]);
+  const confirmDelete = async (r: Routine) => {
+    const ok = await confirm({
+      title: `Borrar «${r.name}»`,
+      message: 'La rutina desaparece. Los entrenos que ya hiciste con ella se conservan.',
+      confirmText: 'Borrar rutina',
+      destructive: true,
+    });
+    if (ok) deleteRoutine(r.id);
   };
 
-  const start = (r: Routine) => {
-    const go = () => {
-      const session = startSession({ routineId: r.id });
-      router.push(`/session/${session.id}`);
-    };
+  const start = async (r: Routine) => {
     if (activeSession) {
-      Alert.alert(
-        'Ya hay un entreno abierto',
-        `Tienes «${activeSession.name}» sin terminar. Ábrelo o ciérralo antes de empezar otro.`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Abrir el actual', onPress: () => router.push(`/session/${activeSession.id}`) },
-        ],
-      );
+      const ok = await confirm({
+        title: 'Ya hay un entreno abierto',
+        message: `Tienes «${activeSession.name}» sin terminar. Ábrelo y ciérralo antes de empezar otro.`,
+        confirmText: 'Abrir el actual',
+      });
+      if (ok) router.push(`/session/${activeSession.id}`);
       return;
     }
-    go();
+    const session = startSession({ routineId: r.id });
+    router.push(`/session/${session.id}`);
   };
 
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven }}
+        contentContainerStyle={{
+          padding: Spacing.four,
+          gap: Spacing.three,
+          paddingBottom: bottomPadding,
+        }}
         showsVerticalScrollIndicator={false}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Text variant="display">Rutinas</Text>
-          <IconButton name="add-circle" size={30} color={c.accent} onPress={() => router.push('/routine/new')} />
-        </Row>
+        <ScreenTitle
+          title="Rutinas"
+          right={
+            <IconButton
+              name="add"
+              size={22}
+              color={c.onAccent}
+              onPress={() => router.push('/routine/new')}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: c.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          }
+        />
 
         <Button
           title="Catálogo de ejercicios"
@@ -76,36 +108,53 @@ export default function RoutinesScreen() {
                 .filter(Boolean)
                 .slice(0, 4)
                 .join(' · ');
+              const sets = r.items.reduce((acc, i) => acc + (i.sets || 0), 0);
+
               return (
-                <Card key={r.id} style={{ gap: Spacing.three }}>
-                  <Pressable onPress={() => router.push(`/routine/${r.id}`)}>
-                    <Row style={{ justifyContent: 'space-between' }}>
-                      <View style={{ flex: 1 }}>
-                        <Text variant="heading">{r.name}</Text>
-                        <Text variant="caption" dim style={{ marginTop: Spacing.half }}>
-                          {exercisesLabel(r.items.length)} ·{' '}
-                          {setsLabel(r.items.reduce((acc, i) => acc + (i.sets || 0), 0))}
+                <Card key={r.id} style={{ gap: Spacing.three, padding: Spacing.three }}>
+                  <Pressable
+                    onPress={() => router.push(`/routine/${r.id}`)}
+                    style={({ pressed }) => ({ gap: Spacing.two, opacity: pressed ? 0.6 : 1 })}>
+                    <Row>
+                      <View style={{ flex: 1, gap: Spacing.half }}>
+                        <Text variant="title" numberOfLines={1}>
+                          {r.name}
+                        </Text>
+                        <Text variant="caption" faint>
+                          {exercisesLabel(r.items.length)} · {setsLabel(sets)}
                         </Text>
                       </View>
-                      <IconButton name="chevron-forward" size={20} />
+                      <Ionicons name="chevron-forward" size={20} color={c.textFaint} />
                     </Row>
                     {names ? (
-                      <Text variant="body" dim numberOfLines={2} style={{ marginTop: Spacing.two }}>
+                      <Text variant="body" dim numberOfLines={2} style={{ lineHeight: 20 }}>
                         {names}
                         {r.items.length > 4 ? ' …' : ''}
                       </Text>
                     ) : null}
                   </Pressable>
 
+                  {/* Empezar manda; duplicar y borrar quedan como iconos para que
+                      no se pulse «Borrar» queriendo entrenar. */}
                   <Row gap={Spacing.two}>
-                    <Button title="Empezar" icon="play" small style={{ flex: 1 }} onPress={() => start(r)} />
                     <Button
-                      title="Duplicar"
-                      variant="secondary"
-                      small
+                      title="Empezar"
+                      icon="play"
+                      style={{ flex: 1 }}
+                      onPress={() => start(r)}
+                    />
+                    <IconButton
+                      name="copy-outline"
+                      size={19}
+                      surface
                       onPress={() => duplicateRoutine(r.id)}
                     />
-                    <Button title="Borrar" variant="danger" small onPress={() => confirmDelete(r)} />
+                    <IconButton
+                      name="trash-outline"
+                      size={19}
+                      surface
+                      onPress={() => confirmDelete(r)}
+                    />
                   </Row>
                 </Card>
               );

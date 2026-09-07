@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button, IconButton, Row, Text } from '@/components/ui';
-import { Radius, Spacing } from '@/constants/theme';
+import { IconButton, ProgressBar, Row, Text } from '@/components/ui';
+import { Radius, Spacing, Tabular } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/format';
@@ -38,10 +38,34 @@ export function useRestTimer(): RestTimer {
 
   const add = useCallback((seconds: number) => {
     setTotal((t) => t + seconds);
-    setEndsAt((e) => (e == null || e < Date.now() ? Date.now() + seconds * 1000 : e + seconds * 1000));
+    setEndsAt((e) =>
+      e == null || e < Date.now() ? Date.now() + seconds * 1000 : e + seconds * 1000,
+    );
   }, []);
 
   return { remaining, total, start, stop, add };
+}
+
+/** Botoncito compacto; en la barra inferior el espacio es oro. */
+function TimerAction({ label, onPress }: { label: string; onPress: () => void }) {
+  const c = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        height: 30,
+        paddingHorizontal: Spacing.three,
+        borderRadius: Radius.sm,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: c.surface3,
+        opacity: pressed ? 0.7 : 1,
+      })}>
+      <Text variant="label" dim>
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 export function RestTimerBar({ timer }: { timer: RestTimer }) {
@@ -54,40 +78,34 @@ export function RestTimerBar({ timer }: { timer: RestTimer }) {
   return (
     <View
       style={{
-        backgroundColor: c.surface,
+        backgroundColor: done ? c.accentSoft : c.surface2,
         borderRadius: Radius.lg,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: done ? c.accent : c.border,
         padding: Spacing.three,
-        gap: Spacing.two,
+        gap: Spacing.three,
       }}>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Text variant="caption" dim style={{ textTransform: 'uppercase' }}>
-          {done ? '¡Descanso terminado!' : 'Descanso'}
-        </Text>
-        <Row gap={Spacing.three}>
-          <Text variant="title" accent={done}>
+        <View style={{ gap: Spacing.half }}>
+          <Text variant="overline" faint>
+            {done ? 'Descanso terminado' : 'Descansando'}
+          </Text>
+          <Text variant="metricSm" accent={done} style={Tabular}>
             {formatDuration(timer.remaining)}
           </Text>
-          <IconButton name="close-circle" size={22} onPress={timer.stop} />
+        </View>
+        <Row gap={Spacing.two} style={{ flexShrink: 0 }}>
+          <TimerAction label="+30 s" onPress={() => timer.add(30)} />
+          <TimerAction label="+1 min" onPress={() => timer.add(60)} />
+          <IconButton name="close-circle" size={24} onPress={timer.stop} />
         </Row>
       </Row>
 
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: c.surface2, overflow: 'hidden' }}>
-        <View
-          style={{
-            width: `${Math.min(100, Math.max(0, progress * 100))}%`,
-            height: '100%',
-            backgroundColor: c.accent,
-          }}
-        />
-      </View>
-
-      <Row gap={Spacing.two}>
-        <Button title="+30 s" variant="secondary" small style={{ flex: 1 }} onPress={() => timer.add(30)} />
-        <Button title="+1 min" variant="secondary" small style={{ flex: 1 }} onPress={() => timer.add(60)} />
-        <Button title="Saltar" variant="secondary" small style={{ flex: 1 }} onPress={timer.stop} />
-      </Row>
+      <ProgressBar
+        value={progress}
+        height={5}
+        track={done ? c.surface : c.surface3}
+      />
     </View>
   );
 }

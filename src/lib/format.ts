@@ -155,3 +155,38 @@ export function plural(n: number, one: string, many: string): string {
 
 export const setsLabel = (n: number) => plural(n, 'serie', 'series');
 export const exercisesLabel = (n: number) => plural(n, 'ejercicio', 'ejercicios');
+
+/**
+ * Resumen de una sesión en una línea, saltándose lo que no aplica: un rodaje
+ * no tiene por qué enseñar «0 kg».
+ */
+export function sessionSummary(session: Session, unit: 'kg' | 'lb'): string {
+  const volume = sessionVolume(session);
+  const km = sessionDistanceKm(session);
+  const duration = sessionDurationSec(session);
+
+  return [
+    setsLabel(sessionSetCount(session)),
+    volume > 0 ? `${num(toDisplayWeight(volume, unit), 0)} ${unit}` : null,
+    km > 0 ? `${num(km, 1)} km` : null,
+    duration ? formatDuration(duration) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Series marcadas y series totales de una sesión, para barras de progreso. */
+export function sessionProgress(session: Session): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const entry of session.entries) {
+    total += entry.sets.length;
+    done += entry.sets.filter((s) => s.done).length;
+  }
+  return { done, total };
+}
+
+/** "6 jul": etiqueta corta para ejes de gráficos. */
+export function formatDayMonth(date: Date): string {
+  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}

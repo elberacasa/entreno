@@ -3,14 +3,23 @@ import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { BarChart, LineChart, type Point } from '@/components/chart';
 import { ExercisePicker } from '@/components/exercise-picker';
-import { Button, Card, Chip, EmptyState, Row, Screen, SectionHeader, StatTile, Text } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
 import {
-  formatDate,
-  formatDuration,
-  num,
-  toDisplayWeight,
-} from '@/lib/format';
+  Card,
+  Chip,
+  Divider,
+  EmptyState,
+  IconButton,
+  Row,
+  Screen,
+  ScreenTitle,
+  SectionHeader,
+  Segmented,
+  StatTile,
+  Text,
+} from '@/components/ui';
+import { MaxContentWidth, Spacing, Tabular } from '@/constants/theme';
+import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
+import { formatDate, formatDuration, num, toDisplayWeight } from '@/lib/format';
 import { exerciseHistory, metricFor, records, weeklyTotals } from '@/lib/stats';
 import { useStore } from '@/lib/store';
 
@@ -18,12 +27,14 @@ type WeeklyMetric = 'volume' | 'sessions' | 'distance';
 
 export default function ProgressScreen() {
   const { width } = useWindowDimensions();
+  const bottomPadding = useTabBarPadding();
   const { sessions, exerciseById, settings } = useStore();
   const [weekly, setWeekly] = useState<WeeklyMetric>('volume');
   const [exerciseId, setExerciseId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
-  const chartWidth = Math.min(width, 800) - Spacing.four * 2 - Spacing.four * 2;
+  // Ancho de pantalla menos el padding del scroll y el de la tarjeta.
+  const chartWidth = Math.min(width, MaxContentWidth) - Spacing.four * 4;
 
   const finished = useMemo(() => sessions.filter((s) => s.finishedAt), [sessions]);
   const weeks = useMemo(() => weeklyTotals(finished, 10), [finished]);
@@ -61,12 +72,18 @@ export default function ProgressScreen() {
     value: Number(p[metric.key] ?? 0),
   }));
 
+  const weeklySuffix = weekly === 'volume' ? settings.unit : weekly === 'distance' ? 'km' : '';
+
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven }}
+        contentContainerStyle={{
+          padding: Spacing.four,
+          gap: Spacing.three,
+          paddingBottom: bottomPadding,
+        }}
         showsVerticalScrollIndicator={false}>
-        <Text variant="display">Progreso</Text>
+        <ScreenTitle title="Progreso" overline="Cómo vas evolucionando" />
 
         {finished.length === 0 ? (
           <Card>
@@ -79,23 +96,32 @@ export default function ProgressScreen() {
         ) : (
           <>
             <SectionHeader title="Últimas 10 semanas" />
-            <Card style={{ gap: Spacing.three }}>
-              <Row gap={Spacing.two}>
-                <Chip label="Volumen" selected={weekly === 'volume'} onPress={() => setWeekly('volume')} />
-                <Chip label="Entrenos" selected={weekly === 'sessions'} onPress={() => setWeekly('sessions')} />
-                <Chip label="Distancia" selected={weekly === 'distance'} onPress={() => setWeekly('distance')} />
-              </Row>
+            <Card style={{ gap: Spacing.four }}>
+              <Segmented<WeeklyMetric>
+                value={weekly}
+                onChange={setWeekly}
+                options={[
+                  { value: 'volume', label: 'Volumen' },
+                  { value: 'sessions', label: 'Entrenos' },
+                  { value: 'distance', label: 'Distancia' },
+                ]}
+              />
               <BarChart
                 data={weeklyPoints}
                 width={chartWidth}
-                suffix={weekly === 'volume' ? settings.unit : weekly === 'distance' ? 'km' : ''}
+                suffix={weeklySuffix}
+                format={(v) => num(v, weekly === 'distance' ? 1 : 0)}
               />
             </Card>
 
             <SectionHeader title="Por ejercicio" />
 
-            {trained.length === 0 ? null : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
+            <Row gap={Spacing.two} style={{ alignItems: 'center' }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: Spacing.two, paddingRight: Spacing.two }}
+                style={{ flex: 1 }}>
                 {trained.slice(0, 12).map((id) => (
                   <Chip
                     key={id}
@@ -105,21 +131,15 @@ export default function ProgressScreen() {
                   />
                 ))}
               </ScrollView>
-            )}
-
-            <Button
-              title={exercise ? `Cambiar (${exercise.name})` : 'Elegir ejercicio'}
-              icon="search"
-              variant="secondary"
-              small
-              onPress={() => setPicking(true)}
-            />
+              {/* Buscar cualquier otro ejercicio del catálogo. */}
+              <IconButton name="search" size={19} surface onPress={() => setPicking(true)} />
+            </Row>
 
             {exercise && history.length > 0 ? (
               <Card style={{ gap: Spacing.four }}>
-                <View>
-                  <Text variant="heading">{exercise.name}</Text>
-                  <Text variant="caption" dim>
+                <View style={{ gap: Spacing.half }}>
+                  <Text variant="title">{exercise.name}</Text>
+                  <Text variant="caption" faint>
                     {metric.label} · {history.length} registros
                   </Text>
                 </View>
@@ -131,11 +151,17 @@ export default function ProgressScreen() {
                   format={
                     exercise.kind === 'time'
                       ? (v) => formatDuration(v)
-                      : (v) => num(exercise.kind === 'strength' ? toDisplayWeight(v, settings.unit) : v, 1)
+                      : (v) =>
+                          num(
+                            exercise.kind === 'strength' ? toDisplayWeight(v, settings.unit) : v,
+                            1,
+                          )
                   }
                 />
 
-                <Row style={{ alignItems: 'flex-start' }}>
+                <Divider />
+
+                <Row style={{ alignItems: 'flex-start' }} gap={Spacing.four}>
                   {exercise.kind === 'strength' ? (
                     <>
                       <StatTile
@@ -144,9 +170,9 @@ export default function ProgressScreen() {
                         unit={settings.unit}
                         accent
                       />
-                      <StatTile label="Con" value={`${pr.maxWeightReps}`} unit="reps" />
+                      <StatTile label="En esa serie" value={`${pr.maxWeightReps}`} unit="reps" />
                       <StatTile
-                        label="1RM est."
+                        label="1RM estimado"
                         value={num(toDisplayWeight(pr.best1RM, settings.unit), 1)}
                         unit={settings.unit}
                       />
@@ -163,14 +189,18 @@ export default function ProgressScreen() {
                     </>
                   ) : (
                     <>
-                      <StatTile label="Mejor serie" value={formatDuration(pr.longestHoldSec)} accent />
+                      <StatTile
+                        label="Mejor serie"
+                        value={formatDuration(pr.longestHoldSec)}
+                        accent
+                      />
                       <StatTile label="Sesiones" value={String(pr.totalSessions)} />
                     </>
                   )}
                 </Row>
 
-                <View style={{ gap: Spacing.two }}>
-                  <Text variant="caption" dim style={{ textTransform: 'uppercase' }}>
+                <View style={{ gap: Spacing.three }}>
+                  <Text variant="overline" faint>
                     Últimos registros
                   </Text>
                   {[...history]
@@ -181,7 +211,7 @@ export default function ProgressScreen() {
                         <Text variant="body" dim>
                           {formatDate(p.date)}
                         </Text>
-                        <Text variant="mono">
+                        <Text variant="label" style={Tabular}>
                           {exercise.kind === 'strength'
                             ? `${num(toDisplayWeight(p.topWeightKg, settings.unit), 1)} ${settings.unit} × ${p.topReps}`
                             : exercise.kind === 'cardio'

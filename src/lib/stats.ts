@@ -1,6 +1,7 @@
 import {
   entryVolume,
   estimate1RM,
+  formatDayMonth,
   sessionDistanceKm,
   sessionVolume,
 } from '@/lib/format';
@@ -154,7 +155,7 @@ export function weeklyTotals(sessions: Session[], weeks = 8): WeekBucket[] {
     start.setDate(start.getDate() - i * 7);
     buckets.push({
       start,
-      label: `${start.getDate()}/${start.getMonth() + 1}`,
+      label: formatDayMonth(start),
       sessions: 0,
       volumeKg: 0,
       distanceKm: 0,

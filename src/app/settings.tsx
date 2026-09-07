@@ -2,16 +2,29 @@ import * as Clipboard from 'expo-clipboard';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
-import { Button, Card, Chip, Field, Row, Screen, SectionHeader, Text } from '@/components/ui';
+import { useDialog } from '@/components/dialog';
+import {
+  Button,
+  Card,
+  Divider,
+  Field,
+  Row,
+  Screen,
+  SectionHeader,
+  Segmented,
+  StatTile,
+  Text,
+} from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { exercisesLabel, formatDuration, num, parseDuration, parseNum, plural } from '@/lib/format';
+import { formatDuration, num, parseDuration, parseNum } from '@/lib/format';
 import { exportPayload, parseBackup, wipeAll } from '@/lib/storage';
 import { useStore } from '@/lib/store';
 
 export default function SettingsScreen() {
   const store = useStore();
+  const { confirm, notify } = useDialog();
   const { settings, exercises, routines, sessions } = store;
   const [busy, setBusy] = useState(false);
 
@@ -35,36 +48,36 @@ export default function SettingsScreen() {
         });
       } else {
         await Clipboard.setStringAsync(payload());
-        Alert.alert('Copiado', 'No se puede compartir aquí, así que copié el backup al portapapeles.');
+        await notify({
+          title: 'Copiado al portapapeles',
+          message: 'Aquí no se puede compartir un archivo, así que dejé el backup copiado. Pégalo donde quieras guardarlo.',
+        });
       }
     } catch (e) {
-      Alert.alert('No se pudo exportar', String(e));
+      await notify({ title: 'No se pudo exportar', message: String(e) });
     } finally {
       setBusy(false);
     }
   };
 
-  const applyBackup = (text: string) => {
+  const applyBackup = async (text: string) => {
     const data = parseBackup(text);
     if (!data) {
-      Alert.alert('Archivo no válido', 'Ese contenido no parece una copia de seguridad de la app.');
+      await notify({
+        title: 'Archivo no válido',
+        message: 'Ese contenido no parece una copia de seguridad de la app.',
+      });
       return;
     }
-    Alert.alert(
-      'Restaurar copia',
-      `Se reemplazarán tus datos actuales por ${data.sessions.length} entrenos y ${data.routines.length} rutinas.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Restaurar',
-          style: 'destructive',
-          onPress: () => {
-            store.replaceAll(data);
-            Alert.alert('Listo', 'Copia restaurada.');
-          },
-        },
-      ],
-    );
+    const ok = await confirm({
+      title: 'Restaurar copia',
+      message: `Se reemplazarán tus datos actuales por ${data.sessions.length} entrenos y ${data.routines.length} rutinas.`,
+      confirmText: 'Restaurar',
+      destructive: true,
+    });
+    if (!ok) return;
+    store.replaceAll(data);
+    await notify({ title: 'Copia restaurada', message: 'Tus datos ya son los del backup.' });
   };
 
   const importFile = async () => {
@@ -72,9 +85,9 @@ export default function SettingsScreen() {
       setBusy(true);
       const picked = await File.pickFileAsync({ mimeTypes: ['application/json'] });
       if (picked.canceled || !picked.result) return;
-      applyBackup(await picked.result.text());
+      await applyBackup(await picked.result.text());
     } catch (e) {
-      Alert.alert('No se pudo importar', String(e));
+      await notify({ title: 'No se pudo importar', message: String(e) });
     } finally {
       setBusy(false);
     }
@@ -83,56 +96,65 @@ export default function SettingsScreen() {
   const importClipboard = async () => {
     const text = await Clipboard.getStringAsync();
     if (!text.trim()) {
-      Alert.alert('Portapapeles vacío', 'Copia primero el contenido del backup.');
+      await notify({
+        title: 'Portapapeles vacío',
+        message: 'Copia primero el contenido del backup.',
+      });
       return;
     }
-    applyBackup(text);
+    await applyBackup(text);
   };
 
-  const reset = () => {
-    Alert.alert(
-      'Borrar todos los datos',
-      'Se borran rutinas, entrenos y ejercicios propios. Esto no se puede deshacer.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Borrar todo',
-          style: 'destructive',
-          onPress: async () => {
-            await wipeAll();
-            Alert.alert('Datos borrados', 'Cierra y vuelve a abrir la app para empezar de cero.');
-          },
-        },
-      ],
-    );
+  const reset = async () => {
+    const ok = await confirm({
+      title: 'Borrar todos los datos',
+      message: 'Se borran rutinas, entrenos y ejercicios propios. Esto no se puede deshacer.',
+      confirmText: 'Borrar todo',
+      destructive: true,
+    });
+    if (!ok) return;
+    await wipeAll();
+    await notify({
+      title: 'Datos borrados',
+      message: 'Cierra y vuelve a abrir la app para empezar de cero.',
+    });
   };
 
   return (
     <Screen edges={[]}>
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven }}
+        contentContainerStyle={{
+          padding: Spacing.four,
+          gap: Spacing.three,
+          paddingBottom: Spacing.seven,
+        }}
         keyboardShouldPersistTaps="handled">
-        <SectionHeader title="Unidades" />
-        <Card style={{ gap: Spacing.three }}>
-          <Text variant="body" dim>
-            Los pesos se guardan siempre en kilos; esto solo cambia cómo se muestran e introducen.
-          </Text>
-          <Row gap={Spacing.two}>
-            <Chip
-              label="Kilogramos (kg)"
-              selected={settings.unit === 'kg'}
-              onPress={() => store.updateSettings({ unit: 'kg' })}
-            />
-            <Chip
-              label="Libras (lb)"
-              selected={settings.unit === 'lb'}
-              onPress={() => store.updateSettings({ unit: 'lb' })}
-            />
+        <SectionHeader title="Tus datos" />
+        <Card>
+          <Row style={{ alignItems: 'flex-start' }} gap={Spacing.four}>
+            <StatTile label="Entrenos" value={String(sessions.length)} accent />
+            <StatTile label="Rutinas" value={String(routines.length)} />
+            <StatTile label="Ejercicios" value={String(exercises.length)} />
           </Row>
         </Card>
 
-        <SectionHeader title="Entrenamiento" />
+        <SectionHeader title="Unidades" />
         <Card style={{ gap: Spacing.three }}>
+          <Segmented<'kg' | 'lb'>
+            value={settings.unit}
+            onChange={(unit) => store.updateSettings({ unit })}
+            options={[
+              { value: 'kg', label: 'Kilogramos' },
+              { value: 'lb', label: 'Libras' },
+            ]}
+          />
+          <Text variant="caption" dim style={{ lineHeight: 18 }}>
+            Los pesos se guardan siempre en kilos; esto solo cambia cómo se muestran e introducen.
+          </Text>
+        </Card>
+
+        <SectionHeader title="Entrenamiento" />
+        <Card style={{ gap: Spacing.four }}>
           <Field
             label="Descanso por defecto (mm:ss)"
             defaultValue={formatDuration(settings.defaultRestSec)}
@@ -141,7 +163,7 @@ export default function SettingsScreen() {
               const sec = parseDuration(v);
               if (sec != null) store.updateSettings({ defaultRestSec: sec });
             }}
-            containerStyle={{ flex: 0 }}
+            full
           />
           <Field
             label={`Peso corporal (${settings.unit})`}
@@ -149,18 +171,23 @@ export default function SettingsScreen() {
             keyboardType="decimal-pad"
             defaultValue={settings.bodyweightKg != null ? num(settings.bodyweightKg) : ''}
             onChangeText={(v) => store.updateSettings({ bodyweightKg: parseNum(v) })}
-            containerStyle={{ flex: 0 }}
+            full
           />
         </Card>
 
         <SectionHeader title="Copia de seguridad" />
-        <Card style={{ gap: Spacing.three }}>
-          <Text variant="body" dim>
+        <Card style={{ gap: Spacing.four }}>
+          <Text variant="body" dim style={{ lineHeight: 21 }}>
             Todo se guarda solo en este teléfono. Exporta de vez en cuando si no quieres perder el
             historial al cambiar de móvil.
           </Text>
           <View style={{ gap: Spacing.two }}>
-            <Button title="Exportar copia" icon="share-outline" loading={busy} onPress={exportFile} />
+            <Button
+              title="Exportar copia"
+              icon="share-outline"
+              loading={busy}
+              onPress={exportFile}
+            />
             <Button
               title="Importar desde archivo"
               icon="document-outline"
@@ -168,30 +195,37 @@ export default function SettingsScreen() {
               loading={busy}
               onPress={importFile}
             />
-            <Button
-              title="Copiar backup al portapapeles"
-              icon="copy-outline"
-              variant="secondary"
-              onPress={async () => {
-                await Clipboard.setStringAsync(payload());
-                Alert.alert('Copiado', 'El backup está en el portapapeles.');
-              }}
-            />
-            <Button
-              title="Importar del portapapeles"
-              icon="clipboard-outline"
-              variant="secondary"
-              onPress={importClipboard}
-            />
+            <Row gap={Spacing.two}>
+              <Button
+                title="Copiar backup"
+                icon="copy-outline"
+                variant="secondary"
+                style={{ flex: 1 }}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(payload());
+                  await notify({
+                    title: 'Copiado',
+                    message: 'El backup está en el portapapeles.',
+                  });
+                }}
+              />
+              <Button
+                title="Pegar backup"
+                icon="clipboard-outline"
+                variant="secondary"
+                style={{ flex: 1 }}
+                onPress={importClipboard}
+              />
+            </Row>
           </View>
-          <Text variant="caption" dim>
-            {plural(sessions.length, 'entreno', 'entrenos')} ·{' '}
-            {plural(routines.length, 'rutina', 'rutinas')} · {exercisesLabel(exercises.length)}
-          </Text>
         </Card>
 
         <SectionHeader title="Zona peligrosa" />
         <Card style={{ gap: Spacing.three }}>
+          <Text variant="caption" dim style={{ lineHeight: 18 }}>
+            Esto no se puede deshacer. Exporta una copia antes si tienes dudas.
+          </Text>
+          <Divider />
           <Button title="Borrar todos los datos" variant="danger" onPress={reset} />
         </Card>
       </ScrollView>

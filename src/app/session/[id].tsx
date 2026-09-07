@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,10 +12,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useDialog } from '@/components/dialog';
 import { ExercisePicker } from '@/components/exercise-picker';
 import { RestTimerBar, useRestTimer } from '@/components/rest-timer';
-import { Button, Card, EmptyState, IconButton, Row, Screen, Text } from '@/components/ui';
-import { Radius, Spacing } from '@/constants/theme';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  ProgressBar,
+  Row,
+  Screen,
+  StatTile,
+  Text,
+} from '@/components/ui';
+import { Radius, Spacing, Tabular, elevation } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -27,31 +38,68 @@ import {
   parseDuration,
   parseNum,
   relativeDay,
-  setsLabel,
   sessionDistanceKm,
   sessionSetCount,
   sessionVolume,
+  setsLabel,
   toDisplayWeight,
 } from '@/lib/format';
 import { makeEntry, makeSet, useStore } from '@/lib/store';
 import type { SessionEntry, SetLog } from '@/lib/types';
+
+/**
+ * Rejilla compartida por la cabecera de columnas y las filas de series. Están
+ * definidas en un solo sitio para que no se desalineen nunca.
+ */
+const INDEX_W = 22;
+const CHECK_W = 40;
+const CELL_GAP = Spacing.two;
+const ROW_H = 44;
+
+interface Column {
+  key: 'weight' | 'reps' | 'rpe' | 'km' | 'time';
+  label: string;
+  flex: number;
+}
+
+function columnsFor(kind: SessionEntry['kind'], unit: 'kg' | 'lb'): Column[] {
+  if (kind === 'strength') {
+    return [
+      { key: 'weight', label: unit, flex: 1 },
+      { key: 'reps', label: 'reps', flex: 1 },
+      { key: 'rpe', label: 'rpe', flex: 0.8 },
+    ];
+  }
+  if (kind === 'cardio') {
+    return [
+      { key: 'km', label: 'km', flex: 1 },
+      { key: 'time', label: 'tiempo', flex: 1 },
+    ];
+  }
+  return [{ key: 'time', label: 'tiempo', flex: 1 }];
+}
 
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = useTheme();
   const store = useStore();
   const timer = useRestTimer();
+  const { confirm, notify } = useDialog();
   const [picking, setPicking] = useState(false);
 
   const session = store.sessionById(String(id));
   const readOnly = Boolean(session?.finishedAt);
-  const now = useNow(!readOnly);
+  const now = useNow(!readOnly && store.ready);
 
   const elapsed = useMemo(() => {
     if (!session) return 0;
     const end = session.finishedAt ? new Date(session.finishedAt).getTime() : now;
     return (end - new Date(session.startedAt).getTime()) / 1000;
   }, [session, now]);
+
+  // Mientras carga el almacén no hay sesión todavía: sin esto se vería un
+  // «ya no existe» durante un instante al abrir la app en esta pantalla.
+  if (!store.ready) return <Screen />;
 
   if (!session) {
     return (
@@ -108,19 +156,20 @@ export default function SessionScreen() {
 
   const removeSet = (entryId: string, setId: string) => {
     patchEntries((entries) =>
-      entries.map((e) => (e.id === entryId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e)),
+      entries.map((e) =>
+        e.id === entryId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e,
+      ),
     );
   };
 
-  const removeEntry = (entry: SessionEntry) => {
-    Alert.alert('Quitar ejercicio', `¿Quitar «${entry.name}» de este entreno?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Quitar',
-        style: 'destructive',
-        onPress: () => patchEntries((entries) => entries.filter((e) => e.id !== entry.id)),
-      },
-    ]);
+  const removeEntry = async (entry: SessionEntry) => {
+    const ok = await confirm({
+      title: 'Quitar ejercicio',
+      message: `Se quita «${entry.name}» de este entreno con las series que lleve.`,
+      confirmText: 'Quitar',
+      destructive: true,
+    });
+    if (ok) patchEntries((entries) => entries.filter((e) => e.id !== entry.id));
   };
 
   const moveEntry = (index: number, delta: number) => {
@@ -133,57 +182,45 @@ export default function SessionScreen() {
     });
   };
 
-  const finish = () => {
+  const finish = async () => {
     const done = sessionSetCount(session);
     if (done === 0) {
-      Alert.alert(
-        'No has marcado ninguna serie',
-        'Marca al menos una serie como hecha, o descarta el entreno.',
-      );
+      await notify({
+        title: 'No has marcado ninguna serie',
+        message: 'Marca al menos una serie como hecha, o descarta el entreno.',
+      });
       return;
     }
-    Alert.alert('Terminar entreno', `Se guardarán ${setsLabel(done)}. Las que no marcaste se descartan.`, [
-      { text: 'Seguir entrenando', style: 'cancel' },
-      {
-        text: 'Terminar',
-        onPress: () => {
-          store.finishSession(session.id);
-          timer.stop();
-          router.back();
-        },
-      },
-    ]);
+    const ok = await confirm({
+      title: 'Terminar entreno',
+      message: `Se guardarán ${setsLabel(done)}. Las que no marcaste se descartan.`,
+      confirmText: 'Terminar',
+      cancelText: 'Seguir entrenando',
+    });
+    if (!ok) return;
+    store.finishSession(session.id);
+    timer.stop();
+    router.back();
   };
 
-  const discard = () => {
-    Alert.alert('Descartar entreno', 'Se borrará todo lo registrado en esta sesión.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Descartar',
-        style: 'destructive',
-        onPress: () => {
-          store.deleteSession(session.id);
-          router.back();
-        },
-      },
-    ]);
+  const discard = async () => {
+    const ok = await confirm({
+      title: 'Descartar entreno',
+      message: 'Se borrará todo lo registrado en esta sesión. No se puede deshacer.',
+      confirmText: 'Descartar',
+      destructive: true,
+    });
+    if (!ok) return;
+    store.deleteSession(session.id);
+    router.back();
   };
+
+  const totalSets = session.entries.reduce((acc, e) => acc + e.sets.length, 0);
+  const doneSets = sessionSetCount(session);
 
   return (
     <Screen edges={[]}>
-      <Stack.Screen
-        options={{
-          title: readOnly ? 'Entreno' : 'En curso',
-          headerRight: () =>
-            readOnly ? null : (
-              <Pressable onPress={finish} hitSlop={8}>
-                <Text variant="label" accent>
-                  Terminar
-                </Text>
-              </Pressable>
-            ),
-        }}
-      />
+      <Stack.Screen options={{ title: readOnly ? 'Entreno' : 'En curso' }} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -191,8 +228,13 @@ export default function SessionScreen() {
         keyboardVerticalOffset={90}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven }}>
-          <Card style={{ gap: Spacing.two }}>
+          contentContainerStyle={{
+            padding: Spacing.four,
+            gap: Spacing.three,
+            // Deja sitio a la barra fija de abajo.
+            paddingBottom: readOnly ? Spacing.seven : 140,
+          }}>
+          <Card style={{ gap: Spacing.three }}>
             {readOnly ? (
               <Text variant="title">{session.name}</Text>
             ) : (
@@ -200,29 +242,43 @@ export default function SessionScreen() {
                 value={session.name}
                 onChangeText={(name) => store.updateSession(session.id, { name })}
                 placeholder="Nombre del entreno"
-                placeholderTextColor={c.textDim}
-                style={{ color: c.text, fontSize: 24, fontWeight: '700' }}
+                placeholderTextColor={c.textFaint}
+                style={{
+                  color: c.text,
+                  fontSize: 22,
+                  fontWeight: '800',
+                  letterSpacing: -0.5,
+                  padding: 0,
+                }}
               />
             )}
-            <Row gap={Spacing.four}>
-              <Text variant="caption" dim>
-                <Ionicons name="time-outline" size={12} /> {formatDuration(elapsed)}
-              </Text>
-              <Text variant="caption" dim>
-                {setsLabel(sessionSetCount(session))}
-              </Text>
+
+            {/* StatTile reparte el ancho a partes iguales y encoge la cifra si
+                hace falta, así la fila nunca se sale de la tarjeta. */}
+            <Row style={{ alignItems: 'flex-start' }} gap={Spacing.three}>
+              <StatTile
+                label="Tiempo"
+                value={formatDuration(elapsed)}
+                accent={!readOnly}
+              />
+              <StatTile label="Series" value={`${doneSets}/${totalSets}`} />
               {sessionVolume(session) > 0 ? (
-                <Text variant="caption" dim>
-                  {num(toDisplayWeight(sessionVolume(session), store.settings.unit), 0)}{' '}
-                  {store.settings.unit}
-                </Text>
+                <StatTile
+                  label="Volumen"
+                  value={num(toDisplayWeight(sessionVolume(session), store.settings.unit), 0)}
+                  unit={store.settings.unit}
+                />
               ) : null}
               {sessionDistanceKm(session) > 0 ? (
-                <Text variant="caption" dim>
-                  {num(sessionDistanceKm(session), 2)} km
-                </Text>
+                <StatTile
+                  label="Distancia"
+                  value={num(sessionDistanceKm(session), 2)}
+                  unit="km"
+                />
               ) : null}
             </Row>
+
+            <ProgressBar value={totalSets > 0 ? doneSets / totalSets : 0} />
           </Card>
 
           {session.entries.length === 0 ? (
@@ -240,9 +296,10 @@ export default function SessionScreen() {
               <EntryCard
                 key={entry.id}
                 entry={entry}
-                index={index}
                 readOnly={readOnly}
                 sessionId={session.id}
+                first={index === 0}
+                last={index === session.entries.length - 1}
                 onToggle={(set) => toggleDone(entry, set)}
                 onChange={(setId, patch) => patchSet(entry.id, setId, patch)}
                 onAddSet={() => addSet(entry)}
@@ -261,19 +318,48 @@ export default function SessionScreen() {
 
           {readOnly ? null : (
             <>
-              <Button title="Añadir ejercicio" icon="add" variant="secondary" onPress={() => setPicking(true)} />
-              <Button title="Descartar entreno" variant="danger" onPress={discard} />
+              <Button
+                title="Añadir ejercicio"
+                icon="add"
+                variant="secondary"
+                onPress={() => setPicking(true)}
+              />
+              {/* Descartar vive al final y en tono apagado: no compite con Terminar. */}
+              <Pressable
+                onPress={discard}
+                hitSlop={8}
+                style={{ alignSelf: 'center', padding: Spacing.three }}>
+                <Text variant="label" danger>
+                  Descartar entreno
+                </Text>
+              </Pressable>
             </>
           )}
         </ScrollView>
 
         {readOnly ? null : (
-          <SafeAreaView edges={['bottom']} style={{ backgroundColor: c.bg }}>
-            <View style={{ paddingHorizontal: Spacing.four, paddingBottom: Spacing.two, gap: Spacing.two }}>
-              <RestTimerBar timer={timer} />
-              <Button title="Terminar entreno" icon="checkmark-done" onPress={finish} />
-            </View>
-          </SafeAreaView>
+          <View
+            style={[
+              {
+                backgroundColor: c.surface,
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: c.border,
+              },
+              elevation(3, c.shadow),
+            ]}>
+            <SafeAreaView edges={['bottom']}>
+              <View
+                style={{
+                  paddingHorizontal: Spacing.four,
+                  paddingTop: Spacing.three,
+                  paddingBottom: Spacing.three,
+                  gap: Spacing.two,
+                }}>
+                <RestTimerBar timer={timer} />
+                <Button title="Terminar entreno" icon="checkmark-done" onPress={finish} />
+              </View>
+            </SafeAreaView>
+          </View>
         )}
       </KeyboardAvoidingView>
 
@@ -293,9 +379,10 @@ export default function SessionScreen() {
 
 function EntryCard({
   entry,
-  index,
   readOnly,
   sessionId,
+  first,
+  last,
   onToggle,
   onChange,
   onAddSet,
@@ -306,9 +393,10 @@ function EntryCard({
   onRest,
 }: {
   entry: SessionEntry;
-  index: number;
   readOnly: boolean;
   sessionId: string;
+  first: boolean;
+  last: boolean;
   onToggle: (set: SetLog) => void;
   onChange: (setId: string, patch: Partial<SetLog>) => void;
   onAddSet: () => void;
@@ -321,89 +409,128 @@ function EntryCard({
   const c = useTheme();
   const { lastEntryFor, settings } = useStore();
   const previous = lastEntryFor(entry.exerciseId, sessionId);
+  const columns = columnsFor(entry.kind, settings.unit);
 
-  const headers =
-    entry.kind === 'strength'
-      ? [settings.unit, 'reps', 'rpe']
-      : entry.kind === 'cardio'
-        ? ['km', 'tiempo']
-        : ['tiempo'];
+  const done = entry.sets.filter((s) => s.done).length;
+  const complete = entry.sets.length > 0 && done === entry.sets.length;
 
   const cycleRest = () => {
     const options = [0, 60, 90, 120, 180, 240];
     const current = entry.restSec ?? 0;
-    const next = options[(options.indexOf(current) + 1) % options.length] ?? 0;
-    onRest(next);
+    onRest(options[(options.indexOf(current) + 1) % options.length] ?? 0);
   };
 
   return (
-    <Card style={{ gap: Spacing.three, padding: Spacing.three }}>
-      <Row style={{ justifyContent: 'space-between' }}>
-        <View style={{ flex: 1 }}>
-          <Text variant="heading">{entry.name}</Text>
+    <Card
+      style={{
+        gap: Spacing.three,
+        padding: Spacing.three,
+        // El ejercicio terminado se marca con el borde, sin gritar.
+        borderColor: complete ? c.accentDim : c.border,
+      }}>
+      <Row style={{ alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, gap: Spacing.half }}>
+          <Row gap={Spacing.two}>
+            <Text variant="heading" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {entry.name}
+            </Text>
+            <Badge
+              label={`${done}/${entry.sets.length}`}
+              tone={complete ? 'accent' : 'neutral'}
+            />
+          </Row>
           {previous ? (
-            <Text variant="caption" dim numberOfLines={1}>
-              Última vez ({relativeDay(previous.session.finishedAt!)}):{' '}
+            <Text variant="caption" faint numberOfLines={1}>
+              {relativeDay(previous.session.finishedAt!)}:{' '}
               {previous.entry.sets
                 .filter((s) => s.done)
                 .slice(0, 3)
                 .map((s) => describeSet(s, previous.entry.kind, settings.unit))
-                .join(' · ')}
+                .join('  ·  ')}
             </Text>
           ) : (
-            <Text variant="caption" dim>
+            <Text variant="caption" faint>
               Primera vez que lo registras
             </Text>
           )}
         </View>
+
         {readOnly ? null : (
-          <Row gap={Spacing.three}>
-            <IconButton name="chevron-up" size={18} onPress={onMoveUp} />
-            <IconButton name="chevron-down" size={18} onPress={onMoveDown} />
-            <IconButton name="trash-outline" size={18} onPress={onRemove} />
+          <Row gap={Spacing.two} style={{ flexShrink: 0 }}>
+            {first ? null : <IconButton name="arrow-up" size={16} onPress={onMoveUp} />}
+            {last ? null : <IconButton name="arrow-down" size={16} onPress={onMoveDown} />}
+            <IconButton name="close" size={18} onPress={onRemove} />
           </Row>
         )}
       </Row>
 
-      <Row gap={Spacing.two} style={{ paddingHorizontal: Spacing.one }}>
-        <Text variant="caption" dim style={{ width: 24 }}>
-          #
-        </Text>
-        {headers.map((h) => (
-          <Text key={h} variant="caption" dim style={{ flex: h === 'rpe' ? 0.7 : 1 }}>
-            {h.toUpperCase()}
+      {/* Cabecera de columnas: mismas anchuras que las filas de abajo. En un
+          entreno ya cerrado no hay columnas, cada serie va en una línea. */}
+      {readOnly ? null : (
+        <Row gap={CELL_GAP}>
+          <Text variant="overline" faint style={{ width: INDEX_W }}>
+            #
           </Text>
-        ))}
-        <View style={{ width: 30 }} />
-      </Row>
+          {columns.map((col) => (
+            <Text
+              key={col.key}
+              variant="overline"
+              faint
+              numberOfLines={1}
+              style={{ flex: col.flex, textAlign: 'center' }}>
+              {col.label}
+            </Text>
+          ))}
+          <View style={{ width: CHECK_W }} />
+        </Row>
+      )}
 
-      {entry.sets.map((set, i) => (
-        <SetRow
-          key={set.id}
-          set={set}
-          index={i + 1}
-          kind={entry.kind}
-          unit={settings.unit}
-          readOnly={readOnly}
-          onToggle={() => onToggle(set)}
-          onChange={(patch) => onChange(set.id, patch)}
-          onRemove={() => onRemoveSet(set.id)}
-        />
-      ))}
+      <View style={{ gap: Spacing.two }}>
+        {entry.sets.map((set, i) => (
+          <SetRow
+            key={set.id}
+            set={set}
+            index={i + 1}
+            columns={columns}
+            unit={settings.unit}
+            readOnly={readOnly}
+            kind={entry.kind}
+            onToggle={() => onToggle(set)}
+            onChange={(patch) => onChange(set.id, patch)}
+            onRemove={() => onRemoveSet(set.id)}
+          />
+        ))}
+      </View>
 
       {readOnly ? null : (
         <Row gap={Spacing.two}>
-          <Button title="Añadir serie" icon="add" variant="secondary" small style={{ flex: 1 }} onPress={onAddSet} />
+          <Button
+            title="Añadir serie"
+            icon="add"
+            variant="secondary"
+            small
+            style={{ flex: 1 }}
+            onPress={onAddSet}
+          />
           <Pressable
             onPress={cycleRest}
-            style={{
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.one + 2,
+              height: 38,
               paddingHorizontal: Spacing.three,
-              paddingVertical: Spacing.two + 2,
               borderRadius: Radius.md,
               backgroundColor: c.surface2,
-            }}>
-            <Text variant="label" dim>
-              Descanso {entry.restSec ? formatDuration(entry.restSec) : 'off'}
+              opacity: pressed ? 0.7 : 1,
+            })}>
+            <Ionicons
+              name="timer-outline"
+              size={15}
+              color={entry.restSec ? c.accent : c.textFaint}
+            />
+            <Text variant="label" dim style={Tabular}>
+              {entry.restSec ? formatDuration(entry.restSec) : 'Sin descanso'}
             </Text>
           </Pressable>
         </Row>
@@ -415,6 +542,7 @@ function EntryCard({
 function SetRow({
   set,
   index,
+  columns,
   kind,
   unit,
   readOnly,
@@ -424,6 +552,7 @@ function SetRow({
 }: {
   set: SetLog;
   index: number;
+  columns: Column[];
   kind: SessionEntry['kind'];
   unit: 'kg' | 'lb';
   readOnly: boolean;
@@ -444,94 +573,118 @@ function SetRow({
 
   if (readOnly) {
     return (
-      <Row gap={Spacing.two} style={{ paddingHorizontal: Spacing.one }}>
-        <Text variant="caption" dim style={{ width: 24 }}>
+      <Row gap={CELL_GAP} style={{ minHeight: 28 }}>
+        <Text variant="caption" faint style={{ width: INDEX_W }}>
           {index}
         </Text>
-        <Text variant="mono" style={{ flex: 1 }}>
+        <Text variant="mono" style={{ flex: 1 }} numberOfLines={1}>
           {describeSet(set, kind, unit)}
         </Text>
-        {set.rpe ? (
-          <Text variant="caption" dim>
-            RPE {set.rpe}
-          </Text>
-        ) : null}
+        {set.rpe ? <Badge label={`RPE ${set.rpe}`} /> : null}
       </Row>
     );
   }
 
-  const cell = (
-    value: string,
-    setValue: (v: string) => void,
-    commit: (v: string) => void,
-    placeholder: string,
-    flex = 1,
-    keyboard: 'decimal-pad' | 'numbers-and-punctuation' = 'decimal-pad',
-  ) => (
-    <TextInput
-      value={value}
-      onChangeText={(v) => {
-        setValue(v);
-        commit(v);
-      }}
-      placeholder={placeholder}
-      placeholderTextColor={c.textDim}
-      keyboardType={keyboard}
-      style={{
-        flex,
-        // Sin `minWidth: 0` el input no encoge y la fila se sale de la tarjeta.
-        minWidth: 0,
-        backgroundColor: set.done ? 'transparent' : c.surface2,
-        borderRadius: Radius.sm,
-        paddingVertical: Spacing.two,
-        textAlign: 'center',
-        color: c.text,
-        fontSize: 16,
-        fontWeight: '700',
-      }}
-    />
-  );
+  const state: Record<Column['key'], { value: string; set: (v: string) => void; commit: (v: string) => void; placeholder: string; keyboard: 'decimal-pad' | 'numbers-and-punctuation' }> = {
+    weight: {
+      value: weight,
+      set: setWeight,
+      commit: (v) => {
+        const parsed = parseNum(v);
+        onChange({ weightKg: parsed == null ? null : fromDisplayWeight(parsed, unit) });
+      },
+      // Un guion como marcador: un «0» parecería un valor ya escrito.
+      placeholder: '–',
+      keyboard: 'decimal-pad',
+    },
+    reps: {
+      value: reps,
+      set: setReps,
+      commit: (v) => onChange({ reps: parseNum(v) }),
+      placeholder: '–',
+      keyboard: 'decimal-pad',
+    },
+    rpe: {
+      value: rpe,
+      set: setRpe,
+      commit: (v) => onChange({ rpe: parseNum(v) }),
+      placeholder: '–',
+      keyboard: 'decimal-pad',
+    },
+    km: {
+      value: km,
+      set: setKm,
+      commit: (v) => onChange({ distanceKm: parseNum(v) }),
+      placeholder: '–',
+      keyboard: 'decimal-pad',
+    },
+    time: {
+      value: time,
+      set: setTime,
+      commit: (v) => onChange({ durationSec: parseDuration(v) }),
+      placeholder: 'mm:ss',
+      keyboard: 'numbers-and-punctuation',
+    },
+  };
 
   return (
-    <Row gap={Spacing.two} style={{ paddingHorizontal: Spacing.one }}>
-      <Pressable onLongPress={onRemove} hitSlop={6} style={{ width: 24 }}>
-        <Text variant="caption" dim>
+    <Row gap={CELL_GAP}>
+      <Pressable onLongPress={onRemove} hitSlop={8} style={{ width: INDEX_W }}>
+        <Text variant="label" faint style={Tabular}>
           {index}
         </Text>
       </Pressable>
 
-      {kind === 'strength' ? (
-        <>
-          {cell(weight, setWeight, (v) => {
-            const parsed = parseNum(v);
-            onChange({ weightKg: parsed == null ? null : fromDisplayWeight(parsed, unit) });
-          }, '0')}
-          {cell(reps, setReps, (v) => onChange({ reps: parseNum(v) }), '0')}
-          {cell(rpe, setRpe, (v) => onChange({ rpe: parseNum(v) }), '–', 0.7)}
-        </>
-      ) : kind === 'cardio' ? (
-        <>
-          {cell(km, setKm, (v) => onChange({ distanceKm: parseNum(v) }), '0.0')}
-          {cell(time, setTime, (v) => onChange({ durationSec: parseDuration(v) }), 'mm:ss', 1, 'numbers-and-punctuation')}
-        </>
-      ) : (
-        cell(time, setTime, (v) => onChange({ durationSec: parseDuration(v) }), 'mm:ss', 1, 'numbers-and-punctuation')
-      )}
+      {columns.map((col) => {
+        const field = state[col.key];
+        return (
+          <TextInput
+            key={col.key}
+            value={field.value}
+            onChangeText={(v) => {
+              field.set(v);
+              field.commit(v);
+            }}
+            placeholder={field.placeholder}
+            placeholderTextColor={c.textFaint}
+            keyboardType={field.keyboard}
+            selectTextOnFocus
+            style={{
+              flex: col.flex,
+              // Sin `minWidth: 0` el input no encoge y la fila se sale de la tarjeta.
+              minWidth: 0,
+              height: ROW_H,
+              // La caja se mantiene igual al marcar la serie: solo cambia el
+              // color. Si desapareciera, la fila cambiaría de alto y las
+              // columnas bailarían.
+              backgroundColor: set.done ? c.accentSoft : c.surface2,
+              borderRadius: Radius.md,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: set.done ? c.accentDim : c.border,
+              textAlign: 'center',
+              color: set.done ? c.accent : c.text,
+              fontSize: 16,
+              fontWeight: '700',
+              ...Tabular,
+            }}
+          />
+        );
+      })}
 
       <Pressable
         onPress={onToggle}
-        hitSlop={6}
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: Radius.sm,
+        style={({ pressed }) => ({
+          width: CHECK_W,
+          height: ROW_H,
+          borderRadius: Radius.md,
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: set.done ? c.accent : c.surface2,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: set.done ? c.accent : c.border,
-        }}>
-        <Ionicons name="checkmark" size={18} color={set.done ? c.onAccent : c.textDim} />
+          opacity: pressed ? 0.7 : 1,
+        })}>
+        <Ionicons name="checkmark" size={20} color={set.done ? c.onAccent : c.textFaint} />
       </Pressable>
     </Row>
   );
