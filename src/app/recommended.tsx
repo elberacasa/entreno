@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
+import { DemoThumb, ExerciseDemoSheet } from '@/components/exercise-demo';
 import { ProfileWizard } from '@/components/profile-wizard';
 import {
   Badge,
@@ -17,7 +18,7 @@ import {
   SectionHeader,
   Text,
 } from '@/components/ui';
-import { Radius, Spacing, Tabular } from '@/constants/theme';
+import { Spacing, Tabular } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration, plural } from '@/lib/format';
 import { buildPlan, planDayToRoutine, uniqueName, type PlanDay, type PlannedItem } from '@/lib/recommend';
@@ -27,6 +28,7 @@ import {
   GOAL_LABEL,
   GOAL_ORDER,
   describeEquipment,
+  type Exercise,
   type Goal,
   type TrainingProfile,
 } from '@/lib/types';
@@ -37,12 +39,6 @@ function describePlanned(item: PlannedItem): string {
   if (item.durationSec != null) return `${item.sets} × ${formatDuration(item.durationSec)}`;
   return `${item.sets} × ${item.reps}`;
 }
-
-const KIND_ICON = {
-  strength: 'barbell' as const,
-  cardio: 'walk' as const,
-  time: 'stopwatch' as const,
-};
 
 export default function RecommendedScreen() {
   const store = useStore();
@@ -57,6 +53,7 @@ function Recommended() {
   const store = useStore();
   const { notify } = useDialog();
   const [wizard, setWizard] = useState({ open: false, seq: 0 });
+  const [demo, setDemo] = useState<Exercise | null>(null);
 
   const profile = store.settings.profile ?? null;
 
@@ -190,34 +187,33 @@ function Recommended() {
                 <Divider />
 
                 <View style={{ gap: Spacing.three }}>
-                  {day.items.map((item, i) => (
-                    <Row key={`${item.exerciseId}-${i}`} gap={Spacing.three}>
-                      <View
-                        style={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: Radius.sm,
-                          backgroundColor: c.surface2,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                        <Ionicons name={KIND_ICON[item.kind]} size={15} color={c.textDim} />
-                      </View>
-                      <View style={{ flex: 1, gap: Spacing.half }}>
-                        <Text variant="body" numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        {item.restSec > 0 ? (
-                          <Text variant="caption" faint>
-                            descanso {formatDuration(item.restSec)}
+                  {day.items.map((item, i) => {
+                    const exercise = store.exerciseById(item.exerciseId);
+                    return (
+                      <Pressable
+                        key={`${item.exerciseId}-${i}`}
+                        onPress={() => (exercise ? setDemo(exercise) : null)}
+                        disabled={!exercise}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                        <Row gap={Spacing.three}>
+                          <DemoThumb exerciseId={item.exerciseId} size={34} />
+                          <View style={{ flex: 1, gap: Spacing.half }}>
+                            <Text variant="body" numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            {item.restSec > 0 ? (
+                              <Text variant="caption" faint>
+                                descanso {formatDuration(item.restSec)}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <Text variant="label" style={Tabular}>
+                            {describePlanned(item)}
                           </Text>
-                        ) : null}
-                      </View>
-                      <Text variant="label" style={Tabular}>
-                        {describePlanned(item)}
-                      </Text>
-                    </Row>
-                  ))}
+                        </Row>
+                      </Pressable>
+                    );
+                  })}
                 </View>
 
                 <Button
@@ -245,6 +241,8 @@ function Recommended() {
           </>
         )}
       </ScrollView>
+
+      <ExerciseDemoSheet exercise={demo} onClose={() => setDemo(null)} />
 
       <ProfileWizard
         key={wizard.seq}

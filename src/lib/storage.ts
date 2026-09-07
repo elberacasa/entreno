@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   type Exercise,
   type Routine,
+  type ScheduledSession,
   type Session,
   type Settings,
 } from '@/lib/types';
@@ -13,6 +14,7 @@ const KEYS = {
   exercises: 'wk.exercises.v1',
   routines: 'wk.routines.v1',
   sessions: 'wk.sessions.v1',
+  schedule: 'wk.schedule.v1',
   settings: 'wk.settings.v1',
 } as const;
 
@@ -20,6 +22,7 @@ export interface AppData {
   exercises: Exercise[];
   routines: Routine[];
   sessions: Session[];
+  schedule: ScheduledSession[];
   settings: Settings;
 }
 
@@ -33,10 +36,11 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function loadAll(): Promise<AppData> {
-  const [exercises, routines, sessions, settings] = await Promise.all([
+  const [exercises, routines, sessions, schedule, settings] = await Promise.all([
     readJson<Exercise[] | null>(KEYS.exercises, null),
     readJson<Routine[]>(KEYS.routines, []),
     readJson<Session[]>(KEYS.sessions, []),
+    readJson<ScheduledSession[]>(KEYS.schedule, []),
     readJson<Settings>(KEYS.settings, DEFAULT_SETTINGS),
   ]);
 
@@ -56,7 +60,7 @@ export async function loadAll(): Promise<AppData> {
     void save.exercises(catalog);
   }
 
-  return { exercises: catalog, routines, sessions, settings: merged };
+  return { exercises: catalog, routines, sessions, schedule, settings: merged };
 }
 
 /**
@@ -73,6 +77,7 @@ export const save = {
   exercises: (v: Exercise[]) => AsyncStorage.setItem(KEYS.exercises, JSON.stringify(v)),
   routines: (v: Routine[]) => AsyncStorage.setItem(KEYS.routines, JSON.stringify(v)),
   sessions: (v: Session[]) => AsyncStorage.setItem(KEYS.sessions, JSON.stringify(v)),
+  schedule: (v: ScheduledSession[]) => AsyncStorage.setItem(KEYS.schedule, JSON.stringify(v)),
   settings: (v: Settings) => AsyncStorage.setItem(KEYS.settings, JSON.stringify(v)),
 };
 
@@ -99,6 +104,8 @@ export function parseBackup(text: string): AppData | null {
       exercises: withEquipment(raw.exercises),
       routines: Array.isArray(raw.routines) ? raw.routines : [],
       sessions: raw.sessions,
+      // Las copias hechas antes de la agenda no traen este campo.
+      schedule: Array.isArray(raw.schedule) ? raw.schedule : [],
       settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },
     };
   } catch {

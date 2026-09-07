@@ -190,3 +190,24 @@ export function sessionProgress(session: Session): { done: number; total: number
 export function formatDayMonth(date: Date): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
 }
+
+/**
+ * "Hoy · 18:30", "Mañana · 07:00" o "vie 12 sep · 18:30".
+ *
+ * No usa `relativeDay` porque aquélla solo mira hacia atrás: para mañana
+ * devolvería "hace -1 d".
+ */
+export function formatWhen(iso: string): string {
+  const time = formatTime(iso);
+  const diff = daysUntil(iso);
+  if (diff === 0) return `Hoy · ${time}`;
+  if (diff === 1) return `Mañana · ${time}`;
+  if (diff === -1) return `Ayer · ${time}`;
+  return `${formatDate(iso)} · ${time}`;
+}
+
+/** Días completos que faltan (negativo si ya pasó). */
+export function daysUntil(iso: string): number {
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((start(new Date(iso)) - start(new Date())) / 86_400_000);
+}

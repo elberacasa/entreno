@@ -5,6 +5,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
 import { ProfileWizard } from '@/components/profile-wizard';
+import { SchedulePicker } from '@/components/schedule-picker';
 import {
   Button,
   Card,
@@ -19,16 +20,18 @@ import {
 import { Radius, Spacing } from '@/constants/theme';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
-import { exercisesLabel, plural, setsLabel } from '@/lib/format';
+import { exercisesLabel, formatWhen, plural, setsLabel } from '@/lib/format';
 import { useStore } from '@/lib/store';
 import { GOAL_LABEL, describeEquipment, type Routine } from '@/lib/types';
 
 export default function RoutinesScreen() {
   const c = useTheme();
   const bottomPadding = useTabBarPadding();
-  const { confirm } = useDialog();
+  const { confirm, notify } = useDialog();
+  const store = useStore();
   const { routines, exerciseById, deleteRoutine, duplicateRoutine, startSession, activeSession } =
-    useStore();
+    store;
+  const [scheduling, setScheduling] = useState<Routine | null>(null);
 
   const confirmDelete = async (r: Routine) => {
     const ok = await confirm({
@@ -147,6 +150,12 @@ export default function RoutinesScreen() {
                       onPress={() => start(r)}
                     />
                     <IconButton
+                      name="calendar-outline"
+                      size={19}
+                      surface
+                      onPress={() => setScheduling(r)}
+                    />
+                    <IconButton
                       name="copy-outline"
                       size={19}
                       surface
@@ -165,6 +174,20 @@ export default function RoutinesScreen() {
           </>
         )}
       </ScrollView>
+
+      <SchedulePicker
+        routine={scheduling}
+        onClose={() => setScheduling(null)}
+        onConfirm={async (at) => {
+          if (!scheduling) return;
+          store.scheduleRoutine(scheduling.id, at);
+          setScheduling(null);
+          await notify({
+            title: 'Programado',
+            message: `«${scheduling.name}» queda para ${formatWhen(at.toISOString()).toLowerCase()}. Lo verás en Hoy cuando se acerque.`,
+          });
+        }}
+      />
     </Screen>
   );
 }

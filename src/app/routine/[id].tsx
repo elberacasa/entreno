@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
+import { DemoButton, ExerciseDemoSheet, hasDemo } from '@/components/exercise-demo';
 import { ExercisePicker } from '@/components/exercise-picker';
 import { Button, Card, EmptyState, Field, IconButton, Row, Screen, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -18,7 +19,7 @@ import {
 } from '@/lib/format';
 import { uid } from '@/lib/id';
 import { useStore } from '@/lib/store';
-import type { PlanItem, Routine } from '@/lib/types';
+import type { Exercise, PlanItem, Routine } from '@/lib/types';
 
 export default function RoutineEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,6 +45,7 @@ function RoutineEditor({ id }: { id: string }) {
     return { id: uid('rt-'), name: '', notes: '', items: [], createdAt: now, updatedAt: now };
   });
   const [picking, setPicking] = useState(false);
+  const [demo, setDemo] = useState<Exercise | null>(null);
 
   const totalSets = useMemo(() => draft.items.reduce((a, i) => a + (i.sets || 0), 0), [draft.items]);
 
@@ -161,11 +163,14 @@ function RoutineEditor({ id }: { id: string }) {
               return (
                 <Card key={item.id} style={{ gap: Spacing.three, padding: Spacing.three }}>
                   <Row style={{ justifyContent: 'space-between' }}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, gap: Spacing.half }}>
                       <Text variant="heading">{exercise?.name ?? 'Ejercicio borrado'}</Text>
-                      <Text variant="caption" dim>
+                      <Text variant="caption" faint>
                         {exercise?.group ?? '—'}
                       </Text>
+                      {exercise && hasDemo(exercise.id) ? (
+                        <DemoButton onPress={() => setDemo(exercise)} />
+                      ) : null}
                     </View>
                     <Row gap={Spacing.three}>
                       <IconButton name="chevron-up" size={18} onPress={() => move(index, -1)} />
@@ -276,6 +281,8 @@ function RoutineEditor({ id }: { id: string }) {
           }))
         }
       />
+
+      <ExerciseDemoSheet exercise={demo} onClose={() => setDemo(null)} />
     </Screen>
   );
 }

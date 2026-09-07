@@ -23,8 +23,10 @@ import { useNow } from '@/hooks/use-now';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  daysUntil,
   exercisesLabel,
   formatDuration,
+  formatWhen,
   num,
   relativeDay,
   sessionProgress,
@@ -85,6 +87,8 @@ export default function TodayScreen() {
         ) : (
           <StartCard routines={routines} onStart={begin} />
         )}
+
+        <Agenda />
 
         <SectionHeader title="Esta semana" />
         <Card style={{ gap: Spacing.five }}>
@@ -310,3 +314,87 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
 });
+
+/**
+ * Lo que hay puesto en la agenda. Lo atrasado no se esconde: se marca y se
+ * queda ahí hasta que lo hagas o lo quites.
+ */
+function Agenda() {
+  const c = useTheme();
+  const store = useStore();
+  const items = store.upcoming();
+
+  if (items.length === 0) return null;
+
+  const startScheduled = (scheduleId: string, routineId: string) => {
+    const session = store.startSession({ routineId });
+    store.unschedule(scheduleId);
+    router.push(`/session/${session.id}`);
+  };
+
+  return (
+    <>
+      <SectionHeader title="Agenda" />
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        {items.slice(0, 5).map((item, i) => {
+          const routine = store.routineById(item.routineId);
+          const days = daysUntil(item.at);
+          const late = days < 0;
+          const today = days === 0;
+
+          return (
+            <View key={item.id}>
+              {i > 0 ? <Divider /> : null}
+              <Row
+                gap={Spacing.three}
+                style={{ padding: Spacing.four, alignItems: 'flex-start' }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: Radius.sm,
+                    backgroundColor: late || today ? c.accentSoft : c.surface2,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Ionicons
+                    name={late ? 'alert-circle' : 'calendar'}
+                    size={18}
+                    color={late || today ? c.accent : c.textDim}
+                  />
+                </View>
+
+                <View style={{ flex: 1, gap: Spacing.one }}>
+                  <Text variant="heading" numberOfLines={1}>
+                    {routine?.name ?? 'Rutina'}
+                  </Text>
+                  <Row gap={Spacing.two}>
+                    <Text variant="caption" dim>
+                      {formatWhen(item.at)}
+                    </Text>
+                    {late ? <Badge label="Sin hacer" tone="accent" /> : null}
+                  </Row>
+                  {(today || late) && !store.activeSession ? (
+                    <Button
+                      title="Empezar ahora"
+                      icon="play"
+                      small
+                      style={{ alignSelf: 'flex-start', marginTop: Spacing.one }}
+                      onPress={() => startScheduled(item.id, item.routineId)}
+                    />
+                  ) : null}
+                </View>
+
+                <IconButton
+                  name="close"
+                  size={18}
+                  onPress={() => store.unschedule(item.id)}
+                />
+              </Row>
+            </View>
+          );
+        })}
+      </Card>
+    </>
+  );
+}

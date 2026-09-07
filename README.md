@@ -25,6 +25,12 @@ exportación e importación de copias de seguridad en Ajustes.
   - `Fuerza` → peso, repeticiones y RPE por serie.
   - `Cardio` → distancia (km) y tiempo, con el ritmo min/km calculado.
   - `Tiempo` → duración por serie (planchas, colgado, movilidad, estiramientos).
+- **Demostración de cada ejercicio**: dos fotos, la posición inicial y la final,
+  que se alternan para que veas el movimiento. Se abre tocando el nombre del
+  ejercicio, tanto en la rutina como en mitad del entreno.
+- **Agenda**: programa una rutina para un día y una hora. Aparece en «Hoy» y
+  desde ahí se empieza de un toque. No hay notificaciones: una web instalada en
+  el iPhone no puede mandarlas sin un servidor de push detrás.
 - **Temporizador de descanso** que arranca solo al marcar una serie.
 - **Historial** de todas las sesiones, agrupado por mes, con volumen y kilómetros.
 - **Progreso**: volumen / entrenos / distancia por semana, y por ejercicio la
@@ -75,8 +81,11 @@ npm run lint
 public/                   se copia tal cual a dist/
   sw.js                   service worker (offline)
   icons/                  iconos de la PWA
+assets/
+  exercises/              fotogramas de las demostraciones (generados)
 scripts/
   make-icons.mjs          genera los PNG desde un SVG (sharp)
+  fetch-exercise-images.mjs  baja y optimiza las demostraciones
   finish-web-build.mjs    inyecta manifest, meta de iOS y registro del SW en dist/
   serve-dist.mjs          servidor local para probar la build
 src/
@@ -96,9 +105,17 @@ src/
     storage.ts            AsyncStorage, export/import
     stats.ts              series temporales, récords, totales por semana
     recommend.ts          generador de rutinas a partir del cuestionario
+    demos.ts              fotogramas por ejercicio (generado, no editar)
     format.ts             formato de pesos, tiempos, ritmos y plurales
     seed.ts               catálogo inicial de ejercicios
 ```
+
+Las demostraciones salen de [free-exercise-db](https://github.com/yuhonas/free-exercise-db),
+de dominio público. `npm run exercise-images` las baja, las reescala a 480 px de
+ancho en WebP y regenera `src/lib/demos.ts`. Son 116 imágenes y 1,6 MB en total,
+frente a los ~60 MB que ocuparían en gif. Van en `assets/` a propósito, para que
+pasen por el empaquetador: así llevan hash, funcionan también en nativo y el
+service worker las cachea como cualquier otro estático.
 
 El catálogo inicial lleva, por ejercicio, el material que necesita y su patrón
 de movimiento (empuje / tirón / pierna / core / cardio). Eso es lo que permite

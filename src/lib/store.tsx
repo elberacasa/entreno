@@ -7,6 +7,7 @@ import {
   type Exercise,
   type PlanItem,
   type Routine,
+  type ScheduledSession,
   type Session,
   type SessionEntry,
   type SetLog,
@@ -27,6 +28,13 @@ interface Store extends AppData {
   deleteRoutine: (id: string) => void;
   duplicateRoutine: (id: string) => Routine | undefined;
   routineById: (id: string) => Routine | undefined;
+
+  // Agenda
+  scheduleRoutine: (routineId: string, at: Date) => void;
+  rescheduleSession: (id: string, at: Date) => void;
+  unschedule: (id: string) => void;
+  /** Lo programado de más cercano a más lejano, lo atrasado incluido. */
+  upcoming: () => ScheduledSession[];
 
   // Sesiones
   activeSession: Session | undefined;
@@ -54,6 +62,7 @@ const EMPTY: AppData = {
   exercises: [],
   routines: [],
   sessions: [],
+  schedule: [],
   settings: DEFAULT_SETTINGS,
 };
 
@@ -74,7 +83,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<Store>(() => {
-    const { exercises, routines, sessions, settings } = data;
+    const { exercises, routines, sessions, schedule, settings } = data;
 
     /**
      * Todas las escrituras parten de la lista actual, no de la del render.
@@ -103,6 +112,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const next = fn(d.sessions);
         void save.sessions(next);
         return { ...d, sessions: next };
+      });
+    };
+
+    const mutateSchedule = (fn: (list: ScheduledSession[]) => ScheduledSession[]) => {
+      setData((d) => {
+        const next = fn(d.schedule);
+        void save.schedule(next);
+        return { ...d, schedule: next };
       });
     };
 
@@ -135,6 +152,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
       deleteRoutine(id) {
         mutateRoutines((list) => list.filter((r) => r.id !== id));
+        // Si la rutina ya no existe, lo que tuviera en la agenda tampoco.
+        mutateSchedule((list) => list.filter((s) => s.routineId !== id));
       },
       duplicateRoutine(id) {
         const source = routines.find((r) => r.id === id);
@@ -153,6 +172,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
       routineById(id) {
         return routines.find((r) => r.id === id);
+      },
+
+      scheduleRoutine(routineId, at) {
+        const entry: ScheduledSession = {
+          id: uid('sc-'),
+          routineId,
+          at: at.toISOString(),
+          createdAt: new Date().toISOString(),
+        };
+        mutateSchedule((list) => [...list, entry]);
+      },
+      rescheduleSession(id, at) {
+        mutateSchedule((list) =>
+          list.map((s) => (s.id === id ? { ...s, at: at.toISOString() } : s)),
+        );
+      },
+      unschedule(id) {
+        mutateSchedule((list) => list.filter((s) => s.id !== id));
+      },
+      upcoming() {
+        // Lo atrasado sigue en la lista a propósito: si no lo hiciste ayer,
+        // quieres verlo, no que desaparezca sin decir nada.
+        return schedule
+          .filter((s) => routines.some((r) => r.id === s.routineId))
+          .sort((a, b) => +new Date(a.at) - +new Date(b.at));
       },
 
       activeSession: sessions.find((s) => !s.finishedAt),
@@ -223,6 +267,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         void save.exercises(next.exercises);
         void save.routines(next.routines);
         void save.sessions(next.sessions);
+        void save.schedule(next.schedule);
         void save.settings(next.settings);
       },
     };

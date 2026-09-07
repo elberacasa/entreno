@@ -25,11 +25,11 @@ import { useStore } from '@/lib/store';
 export default function SettingsScreen() {
   const store = useStore();
   const { confirm, notify } = useDialog();
-  const { settings, exercises, routines, sessions } = store;
+  const { settings, exercises, routines, sessions, schedule } = store;
   const [busy, setBusy] = useState(false);
 
   const payload = () =>
-    JSON.stringify(exportPayload({ exercises, routines, sessions, settings }), null, 2);
+    JSON.stringify(exportPayload({ exercises, routines, sessions, schedule, settings }), null, 2);
 
   const exportFile = async () => {
     try {

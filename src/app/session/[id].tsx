@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useDialog } from '@/components/dialog';
+import { ExerciseDemoSheet, hasDemo } from '@/components/exercise-demo';
 import { ExercisePicker } from '@/components/exercise-picker';
 import { RestTimerBar, useRestTimer } from '@/components/rest-timer';
 import {
@@ -45,7 +46,7 @@ import {
   toDisplayWeight,
 } from '@/lib/format';
 import { makeEntry, makeSet, useStore } from '@/lib/store';
-import type { SessionEntry, SetLog } from '@/lib/types';
+import type { Exercise, SessionEntry, SetLog } from '@/lib/types';
 
 /**
  * Rejilla compartida por la cabecera de columnas y las filas de series. Están
@@ -86,6 +87,7 @@ export default function SessionScreen() {
   const timer = useRestTimer();
   const { confirm, notify } = useDialog();
   const [picking, setPicking] = useState(false);
+  const [demo, setDemo] = useState<Exercise | null>(null);
 
   const session = store.sessionById(String(id));
   const readOnly = Boolean(session?.finishedAt);
@@ -312,6 +314,7 @@ export default function SessionScreen() {
                     entries.map((e) => (e.id === entry.id ? { ...e, restSec: sec } : e)),
                   )
                 }
+                onShowDemo={setDemo}
               />
             ))
           )}
@@ -373,6 +376,8 @@ export default function SessionScreen() {
           ])
         }
       />
+
+      <ExerciseDemoSheet exercise={demo} onClose={() => setDemo(null)} />
     </Screen>
   );
 }
@@ -391,6 +396,7 @@ function EntryCard({
   onMoveUp,
   onMoveDown,
   onRest,
+  onShowDemo,
 }: {
   entry: SessionEntry;
   readOnly: boolean;
@@ -405,10 +411,12 @@ function EntryCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRest: (sec: number) => void;
+  onShowDemo: (exercise: Exercise) => void;
 }) {
   const c = useTheme();
-  const { lastEntryFor, settings } = useStore();
+  const { exerciseById, lastEntryFor, settings } = useStore();
   const previous = lastEntryFor(entry.exerciseId, sessionId);
+  const exercise = exerciseById(entry.exerciseId);
   const columns = columnsFor(entry.kind, settings.unit);
 
   const done = entry.sets.filter((s) => s.done).length;
@@ -430,15 +438,24 @@ function EntryCard({
       }}>
       <Row style={{ alignItems: 'flex-start' }}>
         <View style={{ flex: 1, gap: Spacing.half }}>
-          <Row gap={Spacing.two}>
-            <Text variant="heading" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {entry.name}
-            </Text>
-            <Badge
-              label={`${done}/${entry.sets.length}`}
-              tone={complete ? 'accent' : 'neutral'}
-            />
-          </Row>
+          {/* Tocar el nombre abre la demostración: entre serie y serie es el
+              sitio donde uno duda de la técnica. */}
+          <Pressable
+            onPress={() => (exercise ? onShowDemo(exercise) : null)}
+            disabled={!exercise}>
+            <Row gap={Spacing.two}>
+              <Text variant="heading" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {entry.name}
+              </Text>
+              {exercise && hasDemo(exercise.id) ? (
+                <Ionicons name="play-circle" size={17} color={c.accent} />
+              ) : null}
+              <Badge
+                label={`${done}/${entry.sets.length}`}
+                tone={complete ? 'accent' : 'neutral'}
+              />
+            </Row>
+          </Pressable>
           {previous ? (
             <Text variant="caption" faint numberOfLines={1}>
               {relativeDay(previous.session.finishedAt!)}:{' '}

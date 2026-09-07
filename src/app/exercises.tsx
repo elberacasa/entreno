@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
+import { DemoThumb, ExerciseDemoSheet } from '@/components/exercise-demo';
 import { Button, Chip, Field, IconButton, Row, Screen, Sheet, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,6 +16,7 @@ import {
   EQUIPMENT_ORDER,
   KIND_LABEL,
   type Equipment,
+  type Exercise,
   type ExerciseKind,
 } from '@/lib/types';
 
@@ -30,6 +32,7 @@ export default function ExercisesScreen() {
   const [newGroup, setNewGroup] = useState('Pecho');
   const [kind, setKind] = useState<ExerciseKind>('strength');
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [demo, setDemo] = useState<Exercise | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -107,24 +110,38 @@ export default function ExercisesScreen() {
           {filtered.map((e, i) => (
             <Row
               key={e.id}
+              gap={Spacing.three}
               style={{
-                justifyContent: 'space-between',
                 paddingHorizontal: Spacing.four,
                 paddingVertical: Spacing.three,
                 backgroundColor: c.surface,
                 borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
                 borderTopColor: c.border,
               }}>
-              <View style={{ flex: 1, gap: Spacing.half }}>
-                <Text variant="body">{e.name}</Text>
-                <Text variant="caption" dim>
-                  {describeExercise(e)}
-                  {e.custom ? ' · propio' : ''}
-                </Text>
-                <Text variant="caption" faint numberOfLines={1}>
-                  {describeEquipment(e.equipment)}
-                </Text>
-              </View>
+              {/* La ficha entera abre la demostración. */}
+              <Pressable
+                onPress={() => setDemo(e)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: Spacing.three,
+                  flex: 1,
+                  opacity: pressed ? 0.6 : 1,
+                })}>
+                <DemoThumb exerciseId={e.id} />
+                <View style={{ flex: 1, gap: Spacing.half }}>
+                  <Text variant="body" numberOfLines={1}>
+                    {e.name}
+                  </Text>
+                  <Text variant="caption" dim numberOfLines={1}>
+                    {describeExercise(e)}
+                    {e.custom ? ' · propio' : ''}
+                  </Text>
+                  <Text variant="caption" faint numberOfLines={1}>
+                    {describeEquipment(e.equipment)}
+                  </Text>
+                </View>
+              </Pressable>
               <IconButton name="trash-outline" size={18} onPress={() => confirmDelete(e.id, e.name)} />
             </Row>
           ))}
@@ -188,6 +205,8 @@ export default function ExercisesScreen() {
           siempre.
         </Text>
       </Sheet>
+
+      <ExerciseDemoSheet exercise={demo} onClose={() => setDemo(null)} />
     </Screen>
   );
 }

@@ -124,6 +124,15 @@ export interface Routine {
   updatedAt: string;
 }
 
+/** Una rutina puesta en la agenda para un día y una hora concretos. */
+export interface ScheduledSession {
+  id: string;
+  routineId: string;
+  /** Momento en ISO. Se guarda con la hora local del día elegido. */
+  at: string;
+  createdAt: string;
+}
+
 /** Una serie realmente ejecutada. */
 export interface SetLog {
   id: string;
