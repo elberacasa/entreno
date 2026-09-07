@@ -1,11 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { uid } from '@/lib/id';
 import { loadAll, save, type AppData } from '@/lib/storage';
@@ -80,18 +73,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const setExercises = useCallback((next: Exercise[]) => {
-    setData((d) => ({ ...d, exercises: next }));
-    void save.exercises(next);
-  }, []);
-
-  const setRoutines = useCallback((next: Routine[]) => {
-    setData((d) => ({ ...d, routines: next }));
-    void save.routines(next);
-  }, []);
-
   const value = useMemo<Store>(() => {
     const { exercises, routines, sessions, settings } = data;
+
+    /**
+     * Todas las escrituras parten de la lista actual, no de la del render.
+     * Si tomaran la del render, dos llamadas seguidas en el mismo tick (añadir
+     * las seis rutinas de un plan, por ejemplo) se pisarían y solo quedaría la
+     * última.
+     */
+    const mutateExercises = (fn: (list: Exercise[]) => Exercise[]) => {
+      setData((d) => {
+        const next = fn(d.exercises);
+        void save.exercises(next);
+        return { ...d, exercises: next };
+      });
+    };
+
+    const mutateRoutines = (fn: (list: Routine[]) => Routine[]) => {
+      setData((d) => {
+        const next = fn(d.routines);
+        void save.routines(next);
+        return { ...d, routines: next };
+      });
+    };
 
     const mutateSessions = (fn: (list: Session[]) => Session[]) => {
       setData((d) => {
@@ -107,28 +112,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       addExercise(e) {
         const created: Exercise = { ...e, id: uid('ex-'), custom: true };
-        setExercises([...exercises, created]);
+        mutateExercises((list) => [...list, created]);
         return created;
       },
       updateExercise(id, patch) {
-        setExercises(exercises.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+        mutateExercises((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
       },
       deleteExercise(id) {
-        setExercises(exercises.filter((e) => e.id !== id));
+        mutateExercises((list) => list.filter((e) => e.id !== id));
       },
       exerciseById(id) {
         return exercises.find((e) => e.id === id);
       },
 
       upsertRoutine(r) {
-        const exists = routines.some((x) => x.id === r.id);
         const stamped = { ...r, updatedAt: new Date().toISOString() };
-        setRoutines(
-          exists ? routines.map((x) => (x.id === r.id ? stamped : x)) : [...routines, stamped],
+        mutateRoutines((list) =>
+          list.some((x) => x.id === r.id)
+            ? list.map((x) => (x.id === r.id ? stamped : x))
+            : [...list, stamped],
         );
       },
       deleteRoutine(id) {
-        setRoutines(routines.filter((r) => r.id !== id));
+        mutateRoutines((list) => list.filter((r) => r.id !== id));
       },
       duplicateRoutine(id) {
         const source = routines.find((r) => r.id === id);
@@ -142,7 +148,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           createdAt: now,
           updatedAt: now,
         };
-        setRoutines([...routines, copy]);
+        mutateRoutines((list) => [...list, copy]);
         return copy;
       },
       routineById(id) {
@@ -220,7 +226,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         void save.settings(next.settings);
       },
     };
-  }, [data, ready, setExercises, setRoutines]);
+  }, [data, ready]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

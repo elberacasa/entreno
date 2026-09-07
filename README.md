@@ -14,6 +14,11 @@ exportación e importación de copias de seguridad en Ajustes.
 
 - **Rutinas**: prepara tus entrenos por adelantado — ejercicios, series objetivo,
   reps, peso, distancia, tiempo y descanso.
+- **Plan recomendado**: un cuestionario de cuatro pasos (material disponible,
+  días por semana, minutos por sesión y objetivo) del que sale un plan semanal
+  completo. Solo propone ejercicios que puedas hacer con lo que tienes, reparte
+  la semana según los días y ajusta series, repeticiones y descansos al
+  objetivo, cabiendo en el tiempo que dijiste tener.
 - **Registro en el gimnasio**: abres la rutina y vas marcando series. Cada
   ejercicio muestra qué hiciste la última vez para saber si estás progresando.
 - **Tres tipos de ejercicio**:
@@ -79,17 +84,30 @@ src/
     (tabs)/               Hoy · Rutinas · Historial · Progreso
     session/[id].tsx      registro del entreno (y vista de uno pasado)
     routine/[id].tsx      editor de rutinas ('new' para crear)
+    recommended.tsx       plan generado a partir del cuestionario
     exercises.tsx         catálogo de ejercicios
     settings.tsx          unidades, descanso y copias de seguridad
   components/             UI compartida, gráficos, selector de ejercicios
+    dialog.tsx            confirmaciones (Alert.alert no existe en web)
+    profile-wizard.tsx    cuestionario de material, tiempo y objetivo
   lib/
     types.ts              modelo de datos
     store.tsx             estado global + persistencia
     storage.ts            AsyncStorage, export/import
     stats.ts              series temporales, récords, totales por semana
+    recommend.ts          generador de rutinas a partir del cuestionario
     format.ts             formato de pesos, tiempos, ritmos y plurales
     seed.ts               catálogo inicial de ejercicios
 ```
+
+El catálogo inicial lleva, por ejercicio, el material que necesita y su patrón
+de movimiento (empuje / tirón / pierna / core / cardio). Eso es lo que permite
+filtrar por lo que tienes y repartir la semana con sentido. El orden de la lista
+no se puede tocar: el identificador de cada ejercicio es su posición, y las
+rutinas y los entrenos guardados apuntan a él. Se añaden filas al final y
+`settings.seedVersion` recuerda cuáles se han copiado ya a cada dispositivo, así
+los ejercicios nuevos llegan a quien ya tenía la app sin resucitar los que haya
+borrado.
 
 ### Modelo de datos
 

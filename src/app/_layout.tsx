@@ -51,6 +51,7 @@ export default function RootLayout() {
                   name="routine/[id]"
                   options={{ title: 'Rutina', headerBackTitle: 'Atrás' }}
                 />
+                <Stack.Screen name="recommended" options={{ title: 'Plan recomendado' }} />
                 <Stack.Screen name="exercises" options={{ title: 'Ejercicios' }} />
                 <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
               </Stack>

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
+import { ProfileWizard } from '@/components/profile-wizard';
 import {
   Button,
   Card,
@@ -15,12 +16,12 @@ import {
   SectionHeader,
   Text,
 } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
 import { exercisesLabel, plural, setsLabel } from '@/lib/format';
 import { useStore } from '@/lib/store';
-import type { Routine } from '@/lib/types';
+import { GOAL_LABEL, describeEquipment, type Routine } from '@/lib/types';
 
 export default function RoutinesScreen() {
   const c = useTheme();
@@ -81,6 +82,8 @@ export default function RoutinesScreen() {
             />
           }
         />
+
+        <PlanCard />
 
         <Button
           title="Catálogo de ejercicios"
@@ -163,5 +166,90 @@ export default function RoutinesScreen() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * Puerta de entrada al cuestionario. Mientras no esté contestado invita a
+ * hacerlo; después resume las respuestas y lleva al plan.
+ */
+function PlanCard() {
+  const c = useTheme();
+  const store = useStore();
+  const [wizard, setWizard] = useState({ open: false, seq: 0 });
+  const profile = store.settings.profile ?? null;
+  const open = () => router.push('/recommended');
+
+  if (!profile) {
+    return (
+      <>
+        <Card tone="accent" style={{ gap: Spacing.three, borderColor: c.accent }}>
+          <Row gap={Spacing.three} style={{ alignItems: 'flex-start' }}>
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: Radius.sm,
+                backgroundColor: c.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Ionicons name="sparkles" size={19} color={c.accent} />
+            </View>
+            <View style={{ flex: 1, gap: Spacing.half }}>
+              <Text variant="heading">¿No sabes por dónde empezar?</Text>
+              <Text variant="caption" dim style={{ lineHeight: 18 }}>
+                Cuatro preguntas sobre tu material, tu tiempo y tu objetivo, y te preparo las
+                rutinas.
+              </Text>
+            </View>
+          </Row>
+          <Button
+            title="Hacer el cuestionario"
+            icon="sparkles"
+            onPress={() => setWizard((w) => ({ open: true, seq: w.seq + 1 }))}
+          />
+        </Card>
+
+        <ProfileWizard
+          key={wizard.seq}
+          visible={wizard.open}
+          onClose={() => setWizard((w) => ({ ...w, open: false }))}
+          onDone={(next) => {
+            store.updateSettings({ profile: next });
+            setWizard((w) => ({ ...w, open: false }));
+            open();
+          }}
+        />
+      </>
+    );
+  }
+
+  return (
+    <Pressable onPress={open}>
+      <Card style={{ gap: Spacing.three }}>
+        <Row>
+          <View style={{ flex: 1, gap: Spacing.half }}>
+            <Text variant="overline" faint>
+              Tu plan
+            </Text>
+            <Text variant="heading" numberOfLines={1}>
+              {GOAL_LABEL[profile.goal]} · {profile.daysPerWeek} días · {profile.minutesPerSession}{' '}
+              min
+            </Text>
+            <Text variant="caption" faint numberOfLines={1}>
+              {describeEquipment(profile.equipment)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={c.textFaint} />
+        </Row>
+        <Button
+          title="Ver rutinas recomendadas"
+          icon="sparkles"
+          variant="secondary"
+          onPress={open}
+        />
+      </Card>
+    </Pressable>
   );
 }

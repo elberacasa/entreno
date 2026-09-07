@@ -8,7 +8,15 @@ import { useTheme } from '@/hooks/use-theme';
 import { exercisesLabel } from '@/lib/format';
 import { EXERCISE_GROUPS } from '@/lib/seed';
 import { useStore } from '@/lib/store';
-import { describeExercise, KIND_LABEL, type ExerciseKind } from '@/lib/types';
+import {
+  describeEquipment,
+  describeExercise,
+  EQUIPMENT_LABEL,
+  EQUIPMENT_ORDER,
+  KIND_LABEL,
+  type Equipment,
+  type ExerciseKind,
+} from '@/lib/types';
 
 export default function ExercisesScreen() {
   const c = useTheme();
@@ -21,6 +29,7 @@ export default function ExercisesScreen() {
   const [name, setName] = useState('');
   const [newGroup, setNewGroup] = useState('Pecho');
   const [kind, setKind] = useState<ExerciseKind>('strength');
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,10 +60,16 @@ export default function ExercisesScreen() {
   const create = () => {
     const clean = name.trim();
     if (!clean) return;
-    addExercise({ name: clean, group: newGroup, kind });
+    addExercise({ name: clean, group: newGroup, kind, equipment });
     setName('');
+    setEquipment([]);
     setCreating(false);
   };
+
+  const toggleEquipment = (item: Equipment) =>
+    setEquipment((prev) =>
+      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item],
+    );
 
   return (
     <Screen edges={[]}>
@@ -100,11 +115,14 @@ export default function ExercisesScreen() {
                 borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
                 borderTopColor: c.border,
               }}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, gap: Spacing.half }}>
                 <Text variant="body">{e.name}</Text>
                 <Text variant="caption" dim>
                   {describeExercise(e)}
                   {e.custom ? ' · propio' : ''}
+                </Text>
+                <Text variant="caption" faint numberOfLines={1}>
+                  {describeEquipment(e.equipment)}
                 </Text>
               </View>
               <IconButton name="trash-outline" size={18} onPress={() => confirmDelete(e.id, e.name)} />
@@ -151,6 +169,24 @@ export default function ExercisesScreen() {
             <Chip key={g} label={g} selected={newGroup === g} onPress={() => setNewGroup(g)} />
           ))}
         </Row>
+
+        <Text variant="overline" faint style={{ marginTop: Spacing.two }}>
+          Material que necesita
+        </Text>
+        <Row style={{ flexWrap: 'wrap', gap: Spacing.two }}>
+          {EQUIPMENT_ORDER.map((item) => (
+            <Chip
+              key={item}
+              label={EQUIPMENT_LABEL[item]}
+              selected={equipment.includes(item)}
+              onPress={() => toggleEquipment(item)}
+            />
+          ))}
+        </Row>
+        <Text variant="caption" faint style={{ lineHeight: 17 }}>
+          Sin marcar nada cuenta como peso corporal, y el cuestionario de rutinas lo propondrá
+          siempre.
+        </Text>
       </Sheet>
     </Screen>
   );

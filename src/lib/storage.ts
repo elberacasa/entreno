@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { seedExercises } from '@/lib/seed';
+import { LEGACY_SEED_COUNT, SEED_COUNT, SEED_EQUIPMENT, seedExercises } from '@/lib/seed';
 import {
   DEFAULT_SETTINGS,
   type Exercise,
@@ -40,13 +40,33 @@ export async function loadAll(): Promise<AppData> {
     readJson<Settings>(KEYS.settings, DEFAULT_SETTINGS),
   ]);
 
-  return {
-    // La primera vez no hay nada guardado: sembramos el catálogo por defecto.
-    exercises: exercises ?? seedExercises(),
-    routines,
-    sessions,
-    settings: { ...DEFAULT_SETTINGS, ...settings },
-  };
+  const merged: Settings = { ...DEFAULT_SETTINGS, ...settings };
+
+  const catalog = exercises
+    ? // Ya había catálogo: solo le sumamos los ejercicios incorporados al
+      // catálogo inicial desde la última vez. Los que el usuario haya borrado
+      // no vuelven, porque `seedVersion` ya los da por copiados.
+      [...withEquipment(exercises), ...seedExercises(merged.seedVersion ?? LEGACY_SEED_COUNT)]
+    : // La primera vez no hay nada guardado: sembramos el catálogo entero.
+      seedExercises();
+
+  if (merged.seedVersion !== SEED_COUNT) {
+    merged.seedVersion = SEED_COUNT;
+    void save.settings(merged);
+    void save.exercises(catalog);
+  }
+
+  return { exercises: catalog, routines, sessions, settings: merged };
+}
+
+/**
+ * Los ejercicios guardados antes de que existiera el cuestionario no llevan
+ * material. Se lo rellenamos desde el catálogo inicial para que el generador
+ * de rutinas sepa cuáles se pueden hacer; los ejercicios propios se quedan sin
+ * material, que equivale a "solo peso corporal" y siempre está disponible.
+ */
+function withEquipment(list: Exercise[]): Exercise[] {
+  return list.map((e) => (e.equipment ? e : { ...e, equipment: SEED_EQUIPMENT[e.id] ?? [] }));
 }
 
 export const save = {
@@ -76,7 +96,7 @@ export function parseBackup(text: string): AppData | null {
     if (!raw || typeof raw !== 'object') return null;
     if (!Array.isArray(raw.exercises) || !Array.isArray(raw.sessions)) return null;
     return {
-      exercises: raw.exercises,
+      exercises: withEquipment(raw.exercises),
       routines: Array.isArray(raw.routines) ? raw.routines : [],
       sessions: raw.sessions,
       settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },

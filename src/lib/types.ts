@@ -13,11 +13,92 @@ export const KIND_LABEL: Record<ExerciseKind, string> = {
   time: 'Tiempo',
 };
 
+/**
+ * Material necesario para hacer un ejercicio. El peso corporal no está en la
+ * lista: se da por hecho que siempre lo tienes, así que un ejercicio sin
+ * material (`[]`) se puede hacer en cualquier sitio.
+ */
+export type Equipment =
+  | 'dumbbells'
+  | 'barbell'
+  | 'bench'
+  | 'pullupBar'
+  | 'machines'
+  | 'cardioMachine'
+  | 'outdoors';
+
+export const EQUIPMENT_LABEL: Record<Equipment, string> = {
+  dumbbells: 'Mancuernas',
+  barbell: 'Barra y discos',
+  bench: 'Banco',
+  pullupBar: 'Barra de dominadas',
+  machines: 'Máquinas y poleas',
+  cardioMachine: 'Máquinas de cardio',
+  outdoors: 'Calle o pista',
+};
+
+export const EQUIPMENT_HINT: Record<Equipment, string> = {
+  dumbbells: 'Un par de mancuernas, fijas o regulables',
+  barbell: 'Barra olímpica con discos',
+  bench: 'Banco plano o regulable',
+  pullupBar: 'Barra fija, jaula o estación de fondos',
+  machines: 'Gimnasio con poleas y máquinas',
+  cardioMachine: 'Cinta, bici estática, elíptica o remo',
+  outdoors: 'Sitio para correr o montar en bici',
+};
+
+export const EQUIPMENT_ORDER: Equipment[] = [
+  'dumbbells',
+  'barbell',
+  'bench',
+  'pullupBar',
+  'machines',
+  'cardioMachine',
+  'outdoors',
+];
+
+/** Qué busca el usuario. Cambia series, repeticiones, descansos y cardio. */
+export type Goal = 'muscle' | 'fat' | 'strength' | 'performance';
+
+export const GOAL_LABEL: Record<Goal, string> = {
+  muscle: 'Masa muscular',
+  fat: 'Perder grasa',
+  strength: 'Fuerza',
+  performance: 'Rendimiento',
+};
+
+export const GOAL_HINT: Record<Goal, string> = {
+  muscle: 'Series de 8 a 12 repeticiones y descansos medios: el volumen que hace crecer.',
+  fat: 'Más repeticiones, descansos cortos y algo de cardio al final para gastar más.',
+  strength: 'Pocas repeticiones con peso alto y descansos largos para levantar más.',
+  performance: 'Mezcla de fuerza y cardio, con descansos medios y trabajo continuo.',
+};
+
+export const GOAL_ORDER: Goal[] = ['muscle', 'fat', 'strength', 'performance'];
+
+/** Respuestas del cuestionario: con qué cuentas y qué quieres conseguir. */
+export interface TrainingProfile {
+  equipment: Equipment[];
+  daysPerWeek: number;
+  minutesPerSession: number;
+  goal: Goal;
+  updatedAt: string;
+}
+
+export const DEFAULT_PROFILE: Omit<TrainingProfile, 'updatedAt'> = {
+  equipment: [],
+  daysPerWeek: 3,
+  minutesPerSession: 60,
+  goal: 'muscle',
+};
+
 export interface Exercise {
   id: string;
   name: string;
   kind: ExerciseKind;
   group: string;
+  /** Material que hace falta. Vacío = solo peso corporal. */
+  equipment?: Equipment[];
   custom?: boolean;
 }
 
@@ -78,16 +159,37 @@ export interface Settings {
   unit: 'kg' | 'lb';
   defaultRestSec: number;
   bodyweightKg?: number | null;
+  /** Respuestas del cuestionario de rutinas. `null` mientras no lo conteste. */
+  profile?: TrainingProfile | null;
+  /**
+   * Cuántos ejercicios del catálogo inicial se han copiado ya a este
+   * dispositivo. Permite añadir ejercicios nuevos en futuras versiones sin
+   * resucitar los que el usuario haya borrado. Sin definir = instalación
+   * anterior al cuestionario.
+   */
+  seedVersion?: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   unit: 'kg',
   defaultRestSec: 120,
   bodyweightKg: null,
+  profile: null,
 };
 
 /** "Pecho · Fuerza", pero solo "Cardio" cuando grupo y tipo coinciden. */
 export function describeExercise(e: Pick<Exercise, 'group' | 'kind'>): string {
   const kind = KIND_LABEL[e.kind];
   return e.group === kind ? e.group : `${e.group} · ${kind}`;
+}
+
+/** "Barra y discos · Banco", o "Peso corporal" cuando no hace falta nada. */
+export function describeEquipment(equipment?: Equipment[]): string {
+  if (!equipment || equipment.length === 0) return 'Peso corporal';
+  return equipment.map((e) => EQUIPMENT_LABEL[e]).join(' · ');
+}
+
+/** ¿Se puede hacer con lo que hay? Hace falta todo lo que el ejercicio pide. */
+export function canDoWith(exercise: Pick<Exercise, 'equipment'>, available: Equipment[]): boolean {
+  return (exercise.equipment ?? []).every((item) => available.includes(item));
 }
