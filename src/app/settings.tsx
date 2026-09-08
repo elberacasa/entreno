@@ -1,6 +1,4 @@
 import * as Clipboard from 'expo-clipboard';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
@@ -18,6 +16,7 @@ import {
   Text,
 } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { pickBackup, saveBackup } from '@/lib/backup-file';
 import { formatDuration, num, parseDuration, parseNum } from '@/lib/format';
 import { exportPayload, parseBackup, wipeAll } from '@/lib/storage';
 import { useStore } from '@/lib/store';
@@ -32,29 +31,37 @@ export default function SettingsScreen() {
     JSON.stringify(exportPayload({ exercises, routines, sessions, schedule, settings }), null, 2);
 
   const exportFile = async () => {
+    // El texto se prepara antes de nada: la hoja de compartir del sistema solo
+    // se abre si la llamada sigue contando como respuesta al toque.
+    const json = payload();
+    const stamp = new Date().toISOString().slice(0, 10);
+
     try {
       setBusy(true);
-      const stamp = new Date().toISOString().slice(0, 10);
-      const file = new File(Paths.cache, `workout-backup-${stamp}.json`);
-      if (file.exists) file.delete();
-      file.create();
-      file.write(payload());
+      const result = await saveBackup(json, `workout-backup-${stamp}.json`);
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/json',
-          UTI: 'public.json',
-          dialogTitle: 'Guardar copia de seguridad',
+      if (result === 'downloaded') {
+        await notify({
+          title: 'Copia descargada',
+          message: 'Está en las descargas de tu navegador. Guárdala donde no se te pierda.',
         });
-      } else {
-        await Clipboard.setStringAsync(payload());
+      } else if (result === 'unsupported') {
+        await Clipboard.setStringAsync(json);
         await notify({
           title: 'Copiado al portapapeles',
-          message: 'Aquí no se puede compartir un archivo, así que dejé el backup copiado. Pégalo donde quieras guardarlo.',
+          message:
+            'Aquí no se puede guardar un archivo, así que dejé el backup copiado. Pégalo donde quieras guardarlo.',
         });
       }
     } catch (e) {
-      await notify({ title: 'No se pudo exportar', message: String(e) });
+      // Si no se pudo sacar el fichero, que al menos no se quede sin copia.
+      await Clipboard.setStringAsync(json).catch(() => {});
+      await notify({
+        title: 'No se pudo exportar',
+        message: `${String(e)}
+
+Te dejé el backup copiado al portapapeles por si acaso.`,
+      });
     } finally {
       setBusy(false);
     }
@@ -83,9 +90,9 @@ export default function SettingsScreen() {
   const importFile = async () => {
     try {
       setBusy(true);
-      const picked = await File.pickFileAsync({ mimeTypes: ['application/json'] });
-      if (picked.canceled || !picked.result) return;
-      await applyBackup(await picked.result.text());
+      const text = await pickBackup();
+      if (text === null) return;
+      await applyBackup(text);
     } catch (e) {
       await notify({ title: 'No se pudo importar', message: String(e) });
     } finally {
