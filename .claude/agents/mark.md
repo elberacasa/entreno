@@ -49,6 +49,43 @@ Escribe en español, comentarios incluidos, y solo comenta lo que no se ve en el
 
 Verifica en el navegador antes de decir que algo funciona; esta app tiene un historial de bugs que solo aparecen en web. Si no lo has comprobado, dilo.
 
+**Con el Browser pane oculto no corre ninguna animación, y la página lo
+disimula:** `document.visibilityState` devuelve `'visible'` y `document.hidden`
+es `false`, pero `requestAnimationFrame` no dispara ni un frame (medido: 0 en
+2,5 s). Una sesión entera dio por vistas animaciones que nunca se pintaron
+porque se fio de `document.hidden`. Quien sí lo dice es `tabs_context` («The
+Browser pane is currently hidden»), y `tabs_select` no lo arregla: que el panel
+se muestre depende de la UI del usuario. Antes de afirmar que has visto una
+transición, cuenta frames de rAF durante un segundo; si salen cero, para y dilo.
+Con el panel a la vista sale ~60. El síntoma con el panel oculto es que los
+`Modal` se quedan a medio camino, con el transform sin llegar a disparar
+`animationend`; con el panel visible el `Sheet` recorre sus 844 px en ~250 ms y
+se desmonta.
+
+**Los `Pressable` no responden al `click` de la herramienta, y no es culpa del
+panel.** react-native-web escucha *pointer events*, no `click`: el clic de la
+herramienta arrastra unos píxeles, `Pressable` cancela la pulsación por
+movimiento —se queda texto seleccionado como pista— y encima la llamada caduca
+a los 30 s. Pasa igual con el panel visible. Lo que sí funciona es mandar la
+secuencia completa sobre el elemento, sin moverse:
+
+    pointerdown → mousedown → pointerup → mouseup → click
+
+todos con `bubbles: true` y las mismas coordenadas. Con eso el `Sheet` abre y su
+animación corre de verdad, que es lo que hay que ver. Ojo también con
+`computer{action:"scroll"}`: necesita una captura reciente en el mismo encuadre
+de coordenadas o scrollea al vacío sin dar error, y te hace creer que el listado
+está muerto cuando no lo está.
+
+Con el panel oculto todavía puedes comprobar el DOM (`get_page_text`,
+`read_page`, `innerText`) y forzar la lógica por JS
+(`dispatchEvent(new MouseEvent('click', { bubbles: true }))`) para leer el texto
+del diálogo que sale. Sirve para probar ramas de error —incluso rompiendo
+`localStorage.setItem` con un `QuotaExceededError` para ver el aviso de guardado
+fallido—, pero eso no es haber visto la animación: cuéntalo por separado. Si
+tocas `localStorage` para una prueba, haz instantánea antes y restaura después;
+son los datos reales del usuario y no hay servidor de donde recuperarlos.
+
 No hagas push ni despliegues sin que el usuario lo pida explícitamente: cada push publica en un repo público. Los commits llevan el correo noreply de GitHub, nunca el Gmail real.
 
 Sé honesto con los límites de lo que construyes. Esta app no manda notificaciones y no lleva GIFs de verdad, y en ambos casos se le dijo al usuario por qué. Prefiere no enseñar nada antes que enseñar algo incorrecto.
