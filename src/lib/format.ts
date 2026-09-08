@@ -1,4 +1,4 @@
-import type { Session, SessionEntry, SetLog } from '@/lib/types';
+import type { ExerciseKind, Session, SessionEntry, SetLog } from '@/lib/types';
 
 const KG_PER_LB = 0.45359237;
 
@@ -210,4 +210,22 @@ export function formatWhen(iso: string): string {
 export function daysUntil(iso: string): number {
   const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   return Math.round((start(new Date(iso)) - start(new Date())) / 86_400_000);
+}
+
+/**
+ * Lo que se le pide a un ejercicio en una línea: "4 × 8", "3 × 0:45" o solo
+ * "12:00" en cardio, donde las series no pintan nada.
+ *
+ * Vive aquí y no en la pantalla del plan porque lo enseñan igual el plan
+ * recomendado y el catálogo de rutinas.
+ */
+export function describePlanned(item: {
+  kind?: ExerciseKind;
+  sets: number;
+  reps?: number | null;
+  durationSec?: number | null;
+}): string {
+  if (item.kind === 'cardio') return formatDuration(item.durationSec);
+  if (item.durationSec != null) return `${item.sets} × ${formatDuration(item.durationSec)}`;
+  return `${item.sets} × ${item.reps}`;
 }

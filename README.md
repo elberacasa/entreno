@@ -19,6 +19,11 @@ exportación e importación de copias de seguridad en Ajustes.
   completo. Solo propone ejercicios que puedas hacer con lo que tienes, reparte
   la semana según los días y ajusta series, repeticiones y descansos al
   objetivo, cabiendo en el tiempo que dijiste tener.
+- **Catálogo de rutinas**: 21 rutinas ya montadas, una por cada combinación de
+  nivel (fácil / media / difícil) y zona (empuje, tirón, piernas, core, brazos,
+  tren superior, tren inferior). Se filtran también por el material que tienes,
+  se ven enteras antes de decidir y se copian a tus rutinas de un toque. A
+  diferencia del plan recomendado, no hace falta contestar el cuestionario.
 - **Registro en el gimnasio**: abres la rutina y vas marcando series. Cada
   ejercicio muestra qué hiciste la última vez para saber si estás progresando.
 - **Tres tipos de ejercicio**:
@@ -117,6 +122,7 @@ src/
     session/[id].tsx      registro del entreno (y vista de uno pasado)
     routine/[id].tsx      editor de rutinas ('new' para crear)
     recommended.tsx       plan generado a partir del cuestionario
+    routine-catalog.tsx   catálogo de rutinas ya montadas, con filtros
     exercises.tsx         catálogo de ejercicios
     settings.tsx          unidades, descanso y copias de seguridad
   components/             UI compartida, gráficos, selector de ejercicios
@@ -128,6 +134,7 @@ src/
     storage.ts            AsyncStorage, export/import
     stats.ts              series temporales, récords, totales por semana
     recommend.ts          generador de rutinas a partir del cuestionario
+    routine-catalog.ts    las 21 rutinas fijas del catálogo
     demos.ts              fotogramas por ejercicio (generado, no editar)
     format.ts             formato de pesos, tiempos, ritmos y plurales
     seed.ts               catálogo inicial de ejercicios
@@ -152,7 +159,9 @@ borrado.
 ### Modelo de datos
 
 - `Exercise` — entrada del catálogo (nombre, grupo muscular, tipo).
-- `Routine` → `PlanItem[]` — el plan: qué ejercicios y con qué objetivo.
+- `Routine` → `PlanItem[]` — el plan: qué ejercicios y con qué objetivo. Si
+  salió del catálogo de rutinas, `sourceId` guarda de cuál, para poder marcar
+  allí las que ya tienes aunque las renombres.
 - `Session` → `SessionEntry[]` → `SetLog[]` — lo que realmente hiciste.
   La sesión con `finishedAt: null` es la que está en curso; solo puede haber una.
 

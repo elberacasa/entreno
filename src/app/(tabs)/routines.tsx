@@ -88,6 +88,15 @@ export default function RoutinesScreen() {
 
         <PlanCard />
 
+        {/* Antes que el de ejercicios: una rutina hecha resuelve más que un
+            ejercicio suelto. */}
+        <Button
+          title="Catálogo de rutinas"
+          icon="albums-outline"
+          variant="secondary"
+          onPress={() => router.push('/routine-catalog')}
+        />
+
         <Button
           title="Catálogo de ejercicios"
           icon="library-outline"
@@ -100,7 +109,7 @@ export default function RoutinesScreen() {
             <EmptyState
               icon="clipboard-outline"
               title="Sin rutinas todavía"
-              hint="Una rutina es tu plan: los ejercicios, cuántas series y con qué peso o distancia quieres hacerlos."
+              hint="Una rutina es tu plan: los ejercicios, cuántas series y con qué peso o distancia quieres hacerlos. Si prefieres una ya hecha, cópiala del catálogo de rutinas."
               action="Crear mi primera rutina"
               onAction={() => router.push('/routine/new')}
             />

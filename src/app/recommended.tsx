@@ -20,8 +20,8 @@ import {
 } from '@/components/ui';
 import { Spacing, Tabular } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDuration, plural } from '@/lib/format';
-import { buildPlan, planDayToRoutine, uniqueName, type PlanDay, type PlannedItem } from '@/lib/recommend';
+import { describePlanned, formatDuration, plural } from '@/lib/format';
+import { buildPlan, planDayToRoutine, uniqueName, type PlanDay } from '@/lib/recommend';
 import { useStore } from '@/lib/store';
 import {
   GOAL_HINT,
@@ -32,13 +32,6 @@ import {
   type Goal,
   type TrainingProfile,
 } from '@/lib/types';
-
-/** "4 × 8", "3 × 0:45" o "12:00" según lo que se registre en ese ejercicio. */
-function describePlanned(item: PlannedItem): string {
-  if (item.kind === 'cardio') return formatDuration(item.durationSec);
-  if (item.durationSec != null) return `${item.sets} × ${formatDuration(item.durationSec)}`;
-  return `${item.sets} × ${item.reps}`;
-}
 
 export default function RecommendedScreen() {
   const store = useStore();
@@ -79,13 +72,33 @@ function Recommended() {
     // Los nombres se calculan sobre la marcha para que dos días del mismo plan
     // no acaben llamándose igual.
     const taken = store.routines.map((r) => r.name);
+    const saving: Promise<string | null>[] = [];
     for (const day of days) {
       const name = uniqueName(day.name, taken);
       taken.push(name);
-      store.upsertRoutine(planDayToRoutine(day, profile, name));
+      saving.push(store.upsertRoutine(planDayToRoutine(day, profile, name)));
     }
+
+    // Igual que en el catálogo: si el guardado falla las rutinas viven solo en
+    // memoria, y decir «añadidas» a secas deja al usuario creyendo que las
+    // tiene hasta que recarga y ya no están.
+    const one = days.length === 1;
+    const failed = (await Promise.all(saving)).find(Boolean);
+    if (failed) {
+      await notify({
+        title: one ? 'Añadida, pero sin guardar' : 'Añadidas, pero sin guardar',
+        message: `${
+          one ? 'La rutina está' : `Las ${days.length} rutinas están`
+        } en Rutinas, pero el teléfono no ha podido guardar ${failed}: si cierras la app se ${
+          one ? 'pierde' : 'pierden'
+        }. Copia el backup desde Ajustes antes de seguir.`,
+      });
+      router.back();
+      return;
+    }
+
     await notify({
-      title: days.length === 1 ? 'Rutina añadida' : `${days.length} rutinas añadidas`,
+      title: one ? 'Rutina añadida' : `${days.length} rutinas añadidas`,
       message: 'Ya las tienes en Rutinas, listas para empezar. Puedes editarlas como cualquier otra.',
     });
     router.back();

@@ -217,10 +217,34 @@ function metaFor(exercise: Exercise): { pattern: Pattern; tier: Tier } {
   };
 }
 
-function itemSeconds(item: PlannedItem, workSec: number): number {
+/** Lo mínimo que hay que saber de una línea para cronometrarla. */
+export interface TimedItem {
+  sets: number;
+  durationSec?: number | null;
+  restSec: number;
+}
+
+/**
+ * Segundos por serie cuando el ejercicio no dice cuánto dura. Es lo que tardan
+ * las series de hipertrofia, y sirve de referencia para estimar cualquier
+ * rutina escrita a mano.
+ */
+export const REFERENCE_WORK_SEC = 45;
+
+function itemSeconds(item: TimedItem, workSec: number): number {
   const work = item.durationSec ?? workSec;
   // El descanso de la última serie no cuenta: ya has terminado.
   return item.sets * work + Math.max(0, item.sets - 1) * item.restSec + TRANSITION_SEC;
+}
+
+/**
+ * Minutos que se va a llevar una sesión: trabajo, descansos, el cambio de un
+ * ejercicio a otro y el calentamiento. Lo usan el plan generado y el catálogo
+ * de rutinas, para que el mismo entreno no salga con dos duraciones distintas.
+ */
+export function estimateMinutes(items: TimedItem[], workSec = REFERENCE_WORK_SEC): number {
+  const total = items.reduce((acc, item) => acc + itemSeconds(item, workSec), WARMUP_SEC);
+  return Math.round(total / 60);
 }
 
 /** Construye la línea del plan a partir del ejercicio y la dosis del objetivo. */

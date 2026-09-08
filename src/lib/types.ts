@@ -120,6 +120,13 @@ export interface Routine {
   name: string;
   notes?: string;
   items: PlanItem[];
+  /**
+   * Rutina del catálogo de la que se copió, si vino de ahí. Sirve para marcar
+   * en el catálogo las que ya tienes; por nombre no valdría, porque se
+   * renombran. Es opcional: las rutinas y las copias de seguridad anteriores
+   * siguen cargando igual.
+   */
+  sourceId?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -29,7 +29,12 @@ interface Store extends AppData {
   exerciseById: (id: string) => Exercise | undefined;
 
   // Rutinas
-  upsertRoutine: (r: Routine) => void;
+  /**
+   * Guarda o reemplaza la rutina. La promesa dice qué no se pudo guardar
+   * (`null` si todo fue bien), para que quien avise al usuario no le prometa
+   * una rutina que en realidad vive solo en memoria.
+   */
+  upsertRoutine: (r: Routine) => Promise<string | null>;
   deleteRoutine: (id: string) => void;
   duplicateRoutine: (id: string) => Routine | undefined;
   routineById: (id: string) => Routine | undefined;
@@ -82,10 +87,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * marcada en pantalla, viva solo en memoria, y al recargar ya no estaba.
    * Ahora un fallo deja rastro para que la app pueda avisar.
    */
-  const persist = (write: Promise<void>, what: string) => {
+  const persist = (write: Promise<void>, what: string, done?: (failed: string | null) => void) => {
     write.then(
-      () => setSaveError(null),
-      () => setSaveError(what),
+      () => {
+        setSaveError(null);
+        done?.(null);
+      },
+      () => {
+        setSaveError(what);
+        done?.(what);
+      },
     );
   };
 
@@ -118,12 +129,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
-    const mutateRoutines = (fn: (list: Routine[]) => Routine[]) => {
+    /**
+     * Devuelve una promesa con el resultado del guardado. No se puede sacar de
+     * `setData` porque React ejecuta el actualizador cuando le viene bien, así
+     * que la promesa se crea antes y se resuelve desde dentro.
+     */
+    const mutateRoutines = (fn: (list: Routine[]) => Routine[]): Promise<string | null> => {
+      let settle: (failed: string | null) => void = () => {};
+      const saved = new Promise<string | null>((resolve) => {
+        settle = resolve;
+      });
       setData((d) => {
         const next = fn(d.routines);
-        persist(save.routines(next), 'las rutinas');
+        persist(save.routines(next), 'las rutinas', settle);
         return { ...d, routines: next };
       });
+      return saved;
     };
 
     const mutateSessions = (fn: (list: Session[]) => Session[]) => {
@@ -164,7 +185,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       upsertRoutine(r) {
         const stamped = { ...r, updatedAt: new Date().toISOString() };
-        mutateRoutines((list) =>
+        return mutateRoutines((list) =>
           list.some((x) => x.id === r.id)
             ? list.map((x) => (x.id === r.id ? stamped : x))
             : [...list, stamped],
