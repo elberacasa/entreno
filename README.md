@@ -75,9 +75,32 @@ npx tsc --noEmit
 npm run lint
 ```
 
+## Agentes
+
+En `.claude/agents/` hay tres agentes de Claude Code con el contexto de esta app
+ya cargado — las trampas de react-native-web, dónde se usa y cómo se entrena —
+para no tener que repetirlo en cada conversación. Se invocan por nombre.
+
+- **Mark** — ingeniero. Todo el trabajo de código: features, bugs, refactors,
+  revisiones y despliegue. Conoce Expo 57 + react-native-web, el modelo de datos
+  y por qué el orden de `seed.ts` no se toca.
+- **Joel** — analista de UX. Audita una pantalla o un flujo y ordena los
+  problemas por gravedad, contando toques y midiendo la legibilidad en el móvil,
+  que es donde se usa. Diagnostica; no rediseña ni toca código.
+- **Stefi** — especialista en entrenamiento. Series, repeticiones, descansos,
+  repartos semanales, progresión y qué ejercicios entran en el catálogo. Da el
+  número y dónde aterriza (`PRESCRIPTION`, `SPLITS`, las filas de `seed.ts`).
+  No es médica: no diagnostica lesiones ni pauta dietas.
+
+Cada uno tiene sus límites escritos a propósito, para que no se pisen: una
+decisión de código no la toma Joel, y un número de entrenamiento no lo elige
+Mark.
+
 ## Estructura
 
 ```
+.claude/
+  agents/                 Mark (código) · Joel (UX) · Stefi (entrenamiento)
 public/                   se copia tal cual a dist/
   sw.js                   service worker (offline)
   icons/                  iconos de la PWA

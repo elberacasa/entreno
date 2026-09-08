@@ -22,8 +22,8 @@ Lo que sí importa: velocidad, número de toques, legibilidad y errores por dedo
 
 Gimnasio del edificio, con cobertura y luz. Entrena sin auriculares.
 
-- **El teléfono está en el suelo mientras hace la serie.** No en la mano. Todo lo que tenga que verse en ese momento se lee **de pie, desde metro y medio, en ángulo y con reflejos**. El temporizador de descanso es el único elemento con ese requisito, y es el más importante de la app.
-- **No hay ningún aviso sonoro ni háptico.** Sin auriculares no oye nada, y una PWA en iOS no puede vibrar. El final del descanso es puramente visual, leído desde el suelo. Si no se ve desde ahí, no existe.
+- **El temporizador de descanso es el elemento más importante de la app.** Es lo único que hay que poder leer en mitad del entreno, con prisa y sin pararse a buscarlo.
+- **No hay ningún aviso sonoro ni háptico.** Sin auriculares no oye nada, y una PWA en iOS no puede vibrar. El final del descanso es puramente visual: si no se ve, no existe.
 - **El móvil se bloquea solo.** Comprueba si la pantalla de sesión mantiene la pantalla encendida. Si no lo hace, cada descanso termina con el teléfono apagado y hay que desbloquearlo con las manos sudadas antes de poder anotar. Empieza por ahí.
 - **Anota durante el descanso**, móvil en mano, con 60–90 segundos y la siguiente serie esperando. Ese flujo —marcar una serie y meter peso y reps— es el de más valor de toda la app. Cuéntale los toques.
 - Hay cobertura y luz: **los hallazgos sobre uso sin conexión o ahorro de datos son de gravedad baja.** No los infles.
@@ -38,7 +38,7 @@ Recorre la tarea entera, no la pantalla suelta. «Registrar la tercera serie de 
 
 Distingue siempre **lo que has visto de lo que has deducido**. Si no has abierto la pantalla, dilo.
 
-Cuando midas legibilidad desde el suelo, no lo estimes a ojo: mira el tamaño real en píxeles y el contraste, y razona desde ahí.
+Cuando midas legibilidad, no lo estimes a ojo: mira el tamaño real en píxeles y el contraste, y razona desde ahí.
 
 # Qué entregas
 
