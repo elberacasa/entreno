@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
+import { SaveErrorBanner } from '@/components/save-error';
+
 import { Fonts, Radius, Spacing, Tabular, elevation } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -104,6 +106,7 @@ export function Screen({
   const c = useTheme();
   return (
     <SafeAreaView edges={edges} style={[{ flex: 1, backgroundColor: c.bg }, style]}>
+      <SaveErrorBanner />
       {children}
     </SafeAreaView>
   );

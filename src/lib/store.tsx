@@ -16,6 +16,11 @@ import {
 
 interface Store extends AppData {
   ready: boolean;
+  /**
+   * Qué no se pudo guardar en el teléfono, si es que algo falló. Mientras
+   * tenga valor, lo que hay en pantalla existe solo en memoria.
+   */
+  saveError: string | null;
 
   // Catálogo
   addExercise: (e: Omit<Exercise, 'id'>) => Exercise;
@@ -69,6 +74,20 @@ const EMPTY: AppData = {
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY);
   const [ready, setReady] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  /**
+   * Guardar puede fallar -en web esto es localStorage, y Safari lo bloquea o
+   * lo llena-, y hasta ahora nadie miraba el resultado: la serie aparecía
+   * marcada en pantalla, viva solo en memoria, y al recargar ya no estaba.
+   * Ahora un fallo deja rastro para que la app pueda avisar.
+   */
+  const persist = (write: Promise<void>, what: string) => {
+    write.then(
+      () => setSaveError(null),
+      () => setSaveError(what),
+    );
+  };
 
   useEffect(() => {
     let alive = true;
@@ -94,7 +113,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const mutateExercises = (fn: (list: Exercise[]) => Exercise[]) => {
       setData((d) => {
         const next = fn(d.exercises);
-        void save.exercises(next);
+        persist(save.exercises(next), 'los ejercicios');
         return { ...d, exercises: next };
       });
     };
@@ -102,7 +121,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const mutateRoutines = (fn: (list: Routine[]) => Routine[]) => {
       setData((d) => {
         const next = fn(d.routines);
-        void save.routines(next);
+        persist(save.routines(next), 'las rutinas');
         return { ...d, routines: next };
       });
     };
@@ -110,7 +129,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const mutateSessions = (fn: (list: Session[]) => Session[]) => {
       setData((d) => {
         const next = fn(d.sessions);
-        void save.sessions(next);
+        persist(save.sessions(next), 'los entrenos');
         return { ...d, sessions: next };
       });
     };
@@ -118,7 +137,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const mutateSchedule = (fn: (list: ScheduledSession[]) => ScheduledSession[]) => {
       setData((d) => {
         const next = fn(d.schedule);
-        void save.schedule(next);
+        persist(save.schedule(next), 'la agenda');
         return { ...d, schedule: next };
       });
     };
@@ -126,6 +145,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return {
       ...data,
       ready,
+      saveError,
 
       addExercise(e) {
         const created: Exercise = { ...e, id: uid('ex-'), custom: true };
@@ -257,21 +277,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateSettings(patch) {
         setData((d) => {
           const next = { ...d.settings, ...patch };
-          void save.settings(next);
+          persist(save.settings(next), 'los ajustes');
           return { ...d, settings: next };
         });
       },
 
       replaceAll(next) {
         setData(next);
-        void save.exercises(next.exercises);
-        void save.routines(next.routines);
-        void save.sessions(next.sessions);
-        void save.schedule(next.schedule);
-        void save.settings(next.settings);
+        persist(save.exercises(next.exercises), 'los ejercicios');
+        persist(save.routines(next.routines), 'las rutinas');
+        persist(save.sessions(next.sessions), 'los entrenos');
+        persist(save.schedule(next.schedule), 'la agenda');
+        persist(save.settings(next.settings), 'los ajustes');
       },
     };
-  }, [data, ready]);
+  }, [data, ready, saveError]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

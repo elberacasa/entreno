@@ -18,8 +18,21 @@ import {
 import { Spacing } from '@/constants/theme';
 import { pickBackup, saveBackup } from '@/lib/backup-file';
 import { formatDuration, num, parseDuration, parseNum } from '@/lib/format';
-import { exportPayload, parseBackup, wipeAll } from '@/lib/storage';
+import { exportPayload, loadAll, parseBackup, wipeAll } from '@/lib/storage';
 import { useStore } from '@/lib/store';
+
+/**
+ * En web `setStringAsync` devuelve si de verdad se copió -el permiso puede no
+ * estar-, mientras que en nativo siempre dice que sí. Sin mirarlo, la app
+ * puede jurar que tienes una copia que no existe.
+ */
+async function copy(text: string): Promise<boolean> {
+  try {
+    return await Clipboard.setStringAsync(text);
+  } catch {
+    return false;
+  }
+}
 
 export default function SettingsScreen() {
   const store = useStore();
@@ -46,21 +59,32 @@ export default function SettingsScreen() {
           message: 'Está en las descargas de tu navegador. Guárdala donde no se te pierda.',
         });
       } else if (result === 'unsupported') {
-        await Clipboard.setStringAsync(json);
-        await notify({
-          title: 'Copiado al portapapeles',
-          message:
-            'Aquí no se puede guardar un archivo, así que dejé el backup copiado. Pégalo donde quieras guardarlo.',
-        });
+        await notify(
+          (await copy(json))
+            ? {
+                title: 'Copiado al portapapeles',
+                message:
+                  'Aquí no se puede guardar un archivo, así que dejé el backup copiado. Pégalo donde quieras guardarlo.',
+              }
+            : {
+                title: 'No se pudo guardar la copia',
+                message:
+                  'Ni como archivo ni al portapapeles. Prueba desde Safari en vez de la app instalada, o usa otro navegador.',
+              },
+        );
       }
     } catch (e) {
       // Si no se pudo sacar el fichero, que al menos no se quede sin copia.
-      await Clipboard.setStringAsync(json).catch(() => {});
+      const copied = await copy(json);
       await notify({
         title: 'No se pudo exportar',
-        message: `${String(e)}
+        message: copied
+          ? `${String(e)}
 
-Te dejé el backup copiado al portapapeles por si acaso.`,
+Te dejé el backup copiado al portapapeles por si acaso.`
+          : `${String(e)}
+
+Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.`,
       });
     } finally {
       setBusy(false);
@@ -101,15 +125,28 @@ Te dejé el backup copiado al portapapeles por si acaso.`,
   };
 
   const importClipboard = async () => {
-    const text = await Clipboard.getStringAsync();
-    if (!text.trim()) {
+    try {
+      setBusy(true);
+      // En Safari esto abre el diálogo de pegar del sistema. Si lo cierras o la
+      // ventana no tiene el foco, la promesa se rechaza: sin este catch el
+      // botón no hacía absolutamente nada y parecía roto.
+      const text = await Clipboard.getStringAsync();
+      if (!text.trim()) {
+        await notify({
+          title: 'Portapapeles vacío',
+          message: 'Copia primero el contenido del backup.',
+        });
+        return;
+      }
+      await applyBackup(text);
+    } catch {
       await notify({
-        title: 'Portapapeles vacío',
-        message: 'Copia primero el contenido del backup.',
+        title: 'No se pudo leer el portapapeles',
+        message: 'El navegador no dio permiso. Vuelve a intentarlo y acepta el aviso de pegar.',
       });
-      return;
+    } finally {
+      setBusy(false);
     }
-    await applyBackup(text);
   };
 
   const reset = async () => {
@@ -121,9 +158,14 @@ Te dejé el backup copiado al portapapeles por si acaso.`,
     });
     if (!ok) return;
     await wipeAll();
+    // Borrar el disco no basta: el estado en memoria seguía intacto y la
+    // siguiente cosa que tocaras -las unidades, el descanso- lo reescribía
+    // entero. Se vuelve a cargar, que es lo mismo que ve una instalación
+    // nueva: catálogo de ejercicios y nada más.
+    store.replaceAll(await loadAll());
     await notify({
       title: 'Datos borrados',
-      message: 'Cierra y vuelve a abrir la app para empezar de cero.',
+      message: 'Se fueron las rutinas, los entrenos y los ejercicios que habías añadido.',
     });
   };
 
@@ -209,11 +251,15 @@ Te dejé el backup copiado al portapapeles por si acaso.`,
                 variant="secondary"
                 style={{ flex: 1 }}
                 onPress={async () => {
-                  await Clipboard.setStringAsync(payload());
-                  await notify({
-                    title: 'Copiado',
-                    message: 'El backup está en el portapapeles.',
-                  });
+                  await notify(
+                    (await copy(payload()))
+                      ? { title: 'Copiado', message: 'El backup está en el portapapeles.' }
+                      : {
+                          title: 'No se pudo copiar',
+                          message:
+                            'El navegador no dio permiso para escribir en el portapapeles. Prueba con «Exportar copia».',
+                        },
+                  );
                 }}
               />
               <Button
