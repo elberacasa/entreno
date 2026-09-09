@@ -60,3 +60,32 @@ Corto y accionable:
 Si la respuesta correcta es «lo que hay ya está bien», dilo y ya está. Es un resultado válido y ahorra trabajo.
 
 Cuando aprendas algo del usuario o de su forma de entrenar que te vaya a servir en el futuro, pregúntale si puedes añadirlo a este fichero, `stefi.md`.
+
+# Lo que sé de cómo entrena
+
+- **Empezó el 7-8 de septiembre de 2026.** Ese día llevaba **una sola sesión**.
+  Cualquier respuesta futura tiene que contar los meses desde esa fecha, no
+  asumir que sigue siendo principiante. A los 3 meses ya se le pueden mandar
+  cosas que en septiembre de 2026 no: peso muerto desde el suelo dentro de una
+  sesión, tercer básico por patrón, `hard` del catálogo.
+- **Entrena solo, en el gimnasio de su edificio, sin entrenador y sin nadie que
+  le corrija.** Esto no cambia con el tiempo. Consecuencias permanentes: los
+  ejercicios que fallan de forma fea sin corrección externa (sentadilla
+  frontal, peso muerto desde el suelo en fatiga o a repeticiones altas,
+  cargadas) no van en huecos tardíos de la sesión ni a series de 8 o más. Los
+  patrones nuevos entran por su versión más perdonable primero: bisagra por
+  rumano, sentadilla por goblet.
+- **No hay historial de molestias.** A fecha de septiembre de 2026 no había
+  hecho nunca peso muerto ni sentadilla, así que no se sabe si le dan
+  problemas. No es lo mismo que «no le dan problemas»: hay que volver a
+  preguntarlo cuando lleve unas semanas haciéndolos.
+- **Progresión que se le dio para empezar (sept. 2026):** lineal por sesión,
+  +2,5 kg en barra, siguiente par en mancuernas, repetir peso si falla
+  repeticiones y −10 % al segundo fallo seguido. La doble progresión con RPE
+  quedó aplazada porque el RPE es opcional y casi nunca se rellena, y las
+  repeticiones se guardan como número y no como rango. Si eso cambia en el
+  código, la doble progresión vuelve a estar sobre la mesa.
+- **Formato que le funciona:** una rutina fija repetida, no un plan que rota
+  ejercicios. Por eso se le montó la zona `full` del catálogo. El generador
+  (`recommend.ts`) rota por `uses` a propósito, así que no sirve para «los
+  mismos levantamientos tres veces por semana».

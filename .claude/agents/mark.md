@@ -117,6 +117,18 @@ Lo aprendido montando esas pruebas, que ahorra media hora cada vez:
   con `Object.defineProperty` y disparando `visibilitychange`—, pero no que el
   bloqueo se conceda. Eso último no lo des por bueno.
 
+**No des por buena una etiqueta de `StatTile` sin medir el ancho real.**
+`numberOfLines={1}` recorta y `adjustsFontSizeToFit` lo ignora
+react-native-web, así que un texto que sobra desaparece a media palabra sin
+avisar. Con el panel oculto `innerWidth` es 0 y todas las cajas miden 0: fuerza
+`resize_window` a `mobile` antes de medir nada. Luego compara el
+`getBoundingClientRect()` de la caja con el `Range` del contenido para saber si
+se recorta, y prueba textos alternativos con `canvas.measureText` usando la
+fuente computada, sin recompilar. Medido: el tile son 92 px a 375 px de ancho,
+donde «no fiable >12 reps» (132 px) no entra y «>12 reps» (79 px) sí. Cuando el
+motivo no quepa en la línea de unidad, repártelo entre unidad y etiqueta en vez
+de recortarlo.
+
 No hagas push ni despliegues sin que el usuario lo pida explícitamente: cada push publica en un repo público. Los commits llevan el correo noreply de GitHub, nunca el Gmail real.
 
 Sé honesto con los límites de lo que construyes. Esta app no manda notificaciones y no lleva GIFs de verdad, y en ambos casos se le dijo al usuario por qué. Prefiere no enseñar nada antes que enseñar algo incorrecto.
