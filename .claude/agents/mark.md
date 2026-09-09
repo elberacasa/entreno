@@ -26,7 +26,8 @@ Estas no se deducen leyendo el código. Respétalas.
 - **El React Compiler está activo** (`experiments.reactCompiler`). Prohibido `setState` dentro de un efecto y prohibido `useState(Date.now())`. Para resetear un componente, remóntalo con un `key` que cambie; para la hora, `useSyncExternalStore` (`src/hooks/use-now.ts`).
 - **`typedRoutes` está activo**: una ruta nueva no compila hasta que el servidor de desarrollo regenera `.expo/types/router.d.ts`. Arranca el dev server antes de creer que `tsc` está roto.
 - **El orden de `src/lib/seed.ts` no se toca.** El id de cada ejercicio es su posición en la lista, y las rutinas y sesiones guardadas apuntan a él. Los ejercicios nuevos se añaden **al final** y `settings.seedVersion` recuerda cuáles ya se copiaron a cada dispositivo, para que lleguen a quien ya tenía la app sin resucitar los que haya borrado.
-- **Todas las escrituras del store son actualizaciones funcionales.** Leer el array del render y escribirlo pisaba las escrituras anteriores del mismo tick: guardar seis rutinas guardaba una.
+- **Las escrituras del store parten de `dataRef`, no del array del render, y guardan fuera de `setData`.** Leer el array del render pisaba las escrituras anteriores del mismo tick (guardar seis rutinas guardaba una); meter el guardado dentro del actualizador lo arreglaba pero convertía el actualizador en impuro, que es lo que el React Compiler prohíbe. La ref da las dos cosas.
+- **Lo que no se pudo leer del disco no se sobrescribe.** `readJson` distingue «no hay nada» de «hay algo ilegible»; lo segundo bloquea las escrituras de esa clave y solo se aparta a `<clave>.roto` cuando el usuario lo decide en Ajustes. Cualquier función que escriba tiene que decir qué falló (`upsertRoutine`, `replaceAll`, `discardBroken` devuelven la etiqueta), y ningún «listo» se anuncia sin comprobarlo.
 - **Toda pantalla que cargue datos en un `useState` inicial necesita una guarda `store.ready`.** Sin ella, en una recarga en frío el editor abría vacío y «Guardar» borraba la rutina.
 - Otras: `StyleSheet.absoluteFillObject` no existe en web (usa `absoluteFill`); `headerTitleStyle` del native-stack rechaza `letterSpacing`; `relativeDay` solo mira al pasado, para fechas futuras usa `formatWhen`.
 
@@ -49,10 +50,12 @@ Escribe en español, comentarios incluidos, y solo comenta lo que no se ve en el
 
 Verifica en el navegador antes de decir que algo funciona; esta app tiene un historial de bugs que solo aparecen en web. Si no lo has comprobado, dilo.
 
-**Con el Browser pane oculto no corre ninguna animación, y la página lo
-disimula:** `document.visibilityState` devuelve `'visible'` y `document.hidden`
-es `false`, pero `requestAnimationFrame` no dispara ni un frame (medido: 0 en
-2,5 s). Una sesión entera dio por vistas animaciones que nunca se pintaron
+**Con el Browser pane oculto no corre ninguna animación, y lo que dice la
+página sobre su visibilidad no es fiable en ninguno de los dos sentidos:** una
+vez `document.visibilityState` devolvió `'visible'` y `document.hidden` `false`
+con cero frames de rAF; otra devolvió `'hidden'` y `true`. Lo único que se
+mantiene es el conteo de frames — 0 en 1 s con el panel oculto, ~60 con él a la
+vista. Una sesión entera dio por vistas animaciones que nunca se pintaron
 porque se fio de `document.hidden`. Quien sí lo dice es `tabs_context` («The
 Browser pane is currently hidden»), y `tabs_select` no lo arregla: que el panel
 se muestre depende de la UI del usuario. Antes de afirmar que has visto una
@@ -85,6 +88,34 @@ del diálogo que sale. Sirve para probar ramas de error —incluso rompiendo
 fallido—, pero eso no es haber visto la animación: cuéntalo por separado. Si
 tocas `localStorage` para una prueba, haz instantánea antes y restaura después;
 son los datos reales del usuario y no hay servidor de donde recuperarlos.
+
+Lo aprendido montando esas pruebas, que ahorra media hora cada vez:
+
+- **Define `__tap(el)` y `__find(texto)` en la página** y reutilízalos. `__tap`
+  manda la secuencia de pointer events completa; `__find` coge el **último**
+  elemento cuyo `innerText.trim()` sea exacto, porque react-native-web anida
+  varios `div` con el mismo texto y el de fuera es el clicable. Ojo: cualquier
+  recarga o `navigate` se los lleva por delante, hay que reinyectarlos.
+- **La instantánea de `localStorage` va en `sessionStorage`, no en `window`**:
+  sobrevive a las recargas dentro de la misma pestaña. Al restaurar, compara
+  clave a clave *y* mira qué claves sobran, que las pruebas dejan basura
+  (`wk.rest.v1`, `wk.<clave>.roto`).
+- **Para probar que un fallo de guardado no se limpia solo**, parchea
+  `Storage.prototype.setItem` para que lance **solo** en una clave. Así puedes
+  provocar el fallo en una, guardar bien en otra y comprobar que el aviso sigue.
+  Guarda el original en `window.__origSet` antes de parchear.
+- **Los `Modal` cerrados se quedan en el DOM** con el panel oculto, porque la
+  animación de salida no termina. El `innerText` te enseñará el selector de
+  ejercicios o un diálogo viejo: fíjate en lo último que apareció, no en que
+  esté o no.
+- **`resize_window` con `colorScheme` no repinta el tema de la app** hasta que
+  recargas: la paleta se lee al montar el `AppThemeProvider`. Cambia el esquema
+  y recarga antes de medir contrastes.
+- **`navigator.wakeLock.request()` siempre falla con el panel oculto**
+  (`NotAllowedError: The requesting page is not visible`). Se puede verificar
+  que la llamada sale y que el `catch` la absorbe —fingiendo `visibilityState`
+  con `Object.defineProperty` y disparando `visibilitychange`—, pero no que el
+  bloqueo se conceda. Eso último no lo des por bueno.
 
 No hagas push ni despliegues sin que el usuario lo pida explícitamente: cada push publica en un repo público. Los commits llevan el correo noreply de GitHub, nunca el Gmail real.
 
