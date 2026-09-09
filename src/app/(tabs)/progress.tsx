@@ -182,12 +182,12 @@ export default function ProgressScreen() {
                       />
                       <StatTile label="En esa serie" value={`${pr.maxWeightReps}`} unit="reps" />
                       {/* Un "—" a secas se lee como que la app está rota, así
-                          que la tarjeta dice por qué no hay número. El motivo
-                          va partido entre unidad y etiqueta porque en una sola
-                          línea no cabe: ambas se recortan a una y el tile mide
-                          92 px en un móvil. */}
+                          que la unidad dice por qué no hay número. Solo cabe
+                          ahí: el tile mide 92 px en un móvil y se recorta a una
+                          línea, donde ">12 reps" entra y "no fiable >12 reps"
+                          no. */}
                       <StatTile
-                        label={pr.best1RM === 0 ? '1RM · no fiable' : '1RM estimado'}
+                        label="1RM estimado"
                         value={
                           pr.best1RM === 0
                             ? '—'
