@@ -29,6 +29,7 @@ import {
   Text,
 } from '@/components/ui';
 import { Radius, Spacing, Tabular, elevation } from '@/constants/theme';
+import { useKeepAwake } from '@/hooks/use-keep-awake';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -92,6 +93,10 @@ export default function SessionScreen() {
   const session = store.sessionById(String(id));
   const readOnly = Boolean(session?.finishedAt);
   const now = useNow(!readOnly && store.ready);
+
+  // Solo mientras el entreno está en curso: en uno ya cerrado no hay nada que
+  // mirar entre series y no tiene sentido comerse la batería.
+  useKeepAwake(store.ready && !readOnly && session != null);
 
   const elapsed = useMemo(() => {
     if (!session) return 0;
