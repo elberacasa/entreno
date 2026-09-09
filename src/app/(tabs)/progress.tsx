@@ -55,7 +55,17 @@ export default function ProgressScreen() {
     [finished, selectedId],
   );
   const pr = useMemo(() => records(history), [history]);
-  const metric = exercise ? metricFor(exercise.kind) : metricFor('strength');
+
+  const kindMetric = exercise ? metricFor(exercise.kind) : metricFor('strength');
+  /**
+   * Si de ningún día se puede estimar el 1RM —todas las series por encima de
+   * 12 repeticiones— la gráfica saldría plana en cero. El mejor peso del día
+   * sí es un dato real, así que se pinta ése.
+   */
+  const metric: ReturnType<typeof metricFor> =
+    kindMetric.key === 'best1RM' && history.length > 0 && history.every((p) => p.best1RM === 0)
+      ? { key: 'topWeightKg', label: 'Mejor peso', suffix: 'kg' }
+      : kindMetric;
 
   const weeklyPoints: Point[] = weeks.map((w) => ({
     label: w.label,
@@ -171,10 +181,19 @@ export default function ProgressScreen() {
                         accent
                       />
                       <StatTile label="En esa serie" value={`${pr.maxWeightReps}`} unit="reps" />
+                      {/* Un "—" a secas se lee como que la app está rota, así
+                          que la tarjeta dice por qué no hay número. El motivo
+                          va partido entre unidad y etiqueta porque en una sola
+                          línea no cabe: ambas se recortan a una y el tile mide
+                          92 px en un móvil. */}
                       <StatTile
-                        label="1RM estimado"
-                        value={num(toDisplayWeight(pr.best1RM, settings.unit), 1)}
-                        unit={settings.unit}
+                        label={pr.best1RM === 0 ? '1RM · no fiable' : '1RM estimado'}
+                        value={
+                          pr.best1RM === 0
+                            ? '—'
+                            : num(toDisplayWeight(pr.best1RM, settings.unit), 1)
+                        }
+                        unit={pr.best1RM === 0 ? '>12 reps' : settings.unit}
                       />
                     </>
                   ) : exercise.kind === 'cardio' ? (

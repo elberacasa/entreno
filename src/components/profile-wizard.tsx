@@ -211,7 +211,7 @@ export function ProfileWizard({
               {days === '2'
                 ? 'Dos días: cuerpo completo en cada sesión, centrado en los básicos.'
                 : days === '3'
-                  ? 'Tres días: empuje, tirón y pierna. El reparto clásico y el que mejor sale.'
+                  ? 'Tres días: empuje, tirón y pierna, cada patrón una vez por semana. Si acabas de empezar te cunde más una rutina de cuerpo completo del catálogo, repetida los tres días.'
                   : days === '4'
                     ? 'Cuatro días: torso y pierna, dos veces cada uno.'
                     : days === '5'

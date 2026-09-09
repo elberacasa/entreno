@@ -75,9 +75,12 @@ const PRESCRIPTION: Record<Goal, Prescription> = {
     holdSec: 45,
   },
   fat: {
-    compound: { sets: 3, reps: 12, restSec: 60 },
-    accessory: { sets: 3, reps: 15, restSec: 45 },
-    cardioMin: 12,
+    // En déficit lo que hay que defender es la fuerza: mismos básicos y
+    // descansos de verdad. El gasto lo pone el cardio del final, no acortar
+    // los descansos entre series.
+    compound: { sets: 3, reps: 8, restSec: 120 },
+    accessory: { sets: 3, reps: 12, restSec: 60 },
+    cardioMin: 15,
     workSec: 45,
     holdSec: 40,
   },
@@ -127,7 +130,9 @@ const TEMPLATES: Record<Focus, Slot[]> = {
   push: [
     slot('push', 'compound'),
     slot('push', 'compound'),
-    slot('push', 'accessory'),
+    // Tres básicos de empuje: hay de sobra (banca, militar, fondos, Arnold) y
+    // ahí es donde está el trabajo que cuenta.
+    slot('push', 'compound'),
     slot('push', 'accessory'),
     slot('core', 'accessory'),
   ],
@@ -188,6 +193,10 @@ const FILLERS: Record<Focus, Pattern[]> = {
  * Los básicos de toda la vida. A igualdad de condiciones entran antes que sus
  * variantes: sin esto, un plan de fuerza podía quedarse sin peso muerto solo
  * porque en el catálogo va detrás de los remos.
+ *
+ * El rumano está aquí por lo que evita: sin él, el desempate metía la
+ * sentadilla frontal como segundo básico de pierna, y es de las peores cosas
+ * que se le pueden mandar a alguien que todavía no domina la sentadilla.
  */
 const PRIORITY = new Set([
   'seed-0', // Press banca
@@ -195,6 +204,7 @@ const PRIORITY = new Set([
   'seed-8', // Remo con barra
   'seed-11', // Peso muerto
   'seed-13', // Sentadilla
+  'seed-16', // Peso muerto rumano
   'seed-22', // Press militar
 ]);
 

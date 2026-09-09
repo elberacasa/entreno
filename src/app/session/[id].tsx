@@ -34,6 +34,7 @@ import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import {
   describeSet,
+  describeSetRun,
   formatDuration,
   fromDisplayWeight,
   num,
@@ -464,11 +465,7 @@ function EntryCard({
           {previous ? (
             <Text variant="caption" faint numberOfLines={1}>
               {relativeDay(previous.session.finishedAt!)}:{' '}
-              {previous.entry.sets
-                .filter((s) => s.done)
-                .slice(0, 3)
-                .map((s) => describeSet(s, previous.entry.kind, settings.unit))
-                .join('  ·  ')}
+              {describeSetRun(previous.entry.sets, previous.entry.kind, settings.unit)}
             </Text>
           ) : (
             <Text variant="caption" faint>

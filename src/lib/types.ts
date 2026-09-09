@@ -69,7 +69,7 @@ export const GOAL_LABEL: Record<Goal, string> = {
 
 export const GOAL_HINT: Record<Goal, string> = {
   muscle: 'Series de 8 a 12 repeticiones y descansos medios: el volumen que hace crecer.',
-  fat: 'Más repeticiones, descansos cortos y algo de cardio al final para gastar más.',
+  fat: 'Los mismos básicos y descansos suficientes para no perder fuerza, con cardio al final. Entrenar solo mueve poco la balanza; lo que conservas aquí es el músculo.',
   strength: 'Pocas repeticiones con peso alto y descansos largos para levantar más.',
   performance: 'Mezcla de fuerza y cardio, con descansos medios y trabajo continuo.',
 };

@@ -22,9 +22,10 @@ export const LEVEL_LABEL: Record<Level, string> = {
 
 export const LEVEL_ORDER: Level[] = ['easy', 'medium', 'hard'];
 
-export type Zone = 'push' | 'pull' | 'legs' | 'core' | 'arms' | 'upper' | 'lower';
+export type Zone = 'full' | 'push' | 'pull' | 'legs' | 'core' | 'arms' | 'upper' | 'lower';
 
 export const ZONE_LABEL: Record<Zone, string> = {
+  full: 'Cuerpo completo',
   push: 'Empuje',
   pull: 'Tirón',
   legs: 'Piernas',
@@ -34,7 +35,18 @@ export const ZONE_LABEL: Record<Zone, string> = {
   lower: 'Tren inferior',
 };
 
-export const ZONE_ORDER: Zone[] = ['push', 'pull', 'legs', 'core', 'arms', 'upper', 'lower'];
+// Cuerpo completo va primero: es lo que le sirve a quien acaba de empezar, y
+// es lo primero que ve al abrir el catálogo.
+export const ZONE_ORDER: Zone[] = [
+  'full',
+  'push',
+  'pull',
+  'legs',
+  'core',
+  'arms',
+  'upper',
+  'lower',
+];
 
 export interface CatalogItem {
   /** Identificador del catálogo inicial, `seed-N`. */
@@ -78,10 +90,59 @@ const hold = (seed: number, sets: number, durationSec: number, restSec: number):
 });
 
 /**
- * Una rutina por cada par nivel × zona: 21 en total. Así ningún filtro se
+ * Una rutina por cada par nivel × zona: 24 en total. Así ningún filtro se
  * queda sin resultados. Si se añaden más, hay que mantener esa garantía.
  */
 export const CATALOG_ROUTINES: CatalogRoutine[] = [
+  // --- Cuerpo completo --------------------------------------------------
+  {
+    id: 'cat-full-easy',
+    name: 'Cuerpo completo fácil',
+    level: 'easy',
+    zone: 'full',
+    summary:
+      'Los cinco patrones en una sesión, con mancuernas. Pensada para repetirla tres días por semana subiendo el peso.',
+    items: [
+      reps(50, 3, 8, 120), // Sentadilla goblet
+      reps(2, 3, 8, 120), // Press banca con mancuernas
+      reps(9, 3, 10, 90), // Remo con mancuerna
+      reps(52, 3, 10, 90), // Peso muerto rumano con mancuernas
+      hold(34, 3, 30, 45), // Plancha
+    ],
+  },
+  {
+    id: 'cat-full-medium',
+    name: 'Cuerpo completo medio',
+    level: 'medium',
+    zone: 'full',
+    summary:
+      'Sentadilla, banca, remo y militar en la misma sesión. El esquema de siempre para repetir tres días por semana.',
+    items: [
+      reps(13, 4, 6, 150), // Sentadilla
+      reps(0, 4, 6, 150), // Press banca
+      reps(8, 4, 8, 120), // Remo con barra
+      reps(16, 3, 8, 120), // Peso muerto rumano
+      reps(22, 3, 8, 120), // Press militar
+      hold(34, 3, 45, 45), // Plancha
+    ],
+  },
+  {
+    id: 'cat-full-hard',
+    name: 'Cuerpo completo duro',
+    level: 'hard',
+    zone: 'full',
+    summary:
+      'Sentadilla y banca a 5×5, con peso muerto, dominadas y militar detrás. Sesión larga y pesada; no es por donde se empieza.',
+    items: [
+      reps(13, 5, 5, 180), // Sentadilla
+      reps(0, 5, 5, 180), // Press banca
+      reps(11, 3, 5, 180), // Peso muerto
+      reps(6, 4, 8, 120), // Dominadas
+      reps(22, 4, 8, 120), // Press militar
+      reps(33, 3, 10, 60), // Rueda abdominal
+    ],
+  },
+
   // --- Empuje -----------------------------------------------------------
   {
     id: 'cat-push-easy',
@@ -90,8 +151,8 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     zone: 'push',
     summary: 'Pecho, hombro y tríceps con mancuernas y un banco, sin barra de por medio.',
     items: [
-      reps(5, 3, 10, 90), // Flexiones
       reps(2, 3, 12, 90), // Press banca con mancuernas
+      reps(5, 3, 10, 90), // Flexiones
       reps(24, 3, 15, 60), // Elevaciones laterales
       reps(57, 3, 10, 60), // Fondos en banco
     ],
@@ -116,7 +177,7 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     name: 'Empuje duro',
     level: 'hard',
     zone: 'push',
-    summary: 'Dos básicos a series bajas y cinco accesorios detrás: el día largo de empuje.',
+    summary: 'Cuatro básicos de empuje y tres accesorios: el día largo. Cerca de 70 minutos.',
     items: [
       reps(0, 5, 5, 180), // Press banca
       reps(22, 4, 6, 150), // Press militar
@@ -299,7 +360,8 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     name: 'Brazos duro',
     level: 'hard',
     zone: 'arms',
-    summary: 'Empieza con dominadas y fondos, que mueven más brazo que cualquier curl, y aísla después.',
+    summary:
+      'Dominadas y fondos primero, que cargan bíceps y tríceps con más peso que cualquier curl, y aislamiento después.',
     items: [
       reps(6, 4, 8, 120), // Dominadas
       reps(4, 4, 10, 120), // Fondos en paralelas
@@ -318,9 +380,9 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     zone: 'upper',
     summary: 'Empuje y tirón en la misma sesión, con mancuernas y polea.',
     items: [
-      reps(5, 3, 10, 90), // Flexiones
-      reps(7, 3, 12, 90), // Jalón al pecho
       reps(2, 3, 12, 90), // Press banca con mancuernas
+      reps(7, 3, 12, 90), // Jalón al pecho
+      reps(5, 3, 10, 90), // Flexiones
       reps(9, 3, 12, 90), // Remo con mancuerna
       reps(24, 3, 15, 60), // Elevaciones laterales
     ],
@@ -345,7 +407,7 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     name: 'Torso duro',
     level: 'hard',
     zone: 'upper',
-    summary: 'Los cuatro grandes del torso y cuatro accesorios. Cuenta con hora y media de gimnasio.',
+    summary: 'Los cuatro grandes del torso y cuatro accesorios. Cerca de 80 minutos de gimnasio.',
     items: [
       reps(0, 5, 5, 180), // Press banca
       reps(6, 4, 8, 150), // Dominadas
@@ -396,7 +458,9 @@ export const CATALOG_ROUTINES: CatalogRoutine[] = [
     summary: 'Peso muerto y sentadilla el mismo día, y todavía queda glúteo y unilateral.',
     items: [
       reps(11, 5, 5, 180), // Peso muerto
-      reps(13, 5, 5, 180), // Sentadilla
+      // Tres series de sentadilla, no cinco: el peso muerto ya viene a 5×5 el
+      // mismo día y la espalda baja no da para las dos cosas.
+      reps(13, 3, 5, 180), // Sentadilla
       reps(51, 4, 10, 90), // Zancada búlgara
       reps(20, 4, 10, 90), // Hip thrust
       reps(19, 4, 12, 75), // Curl femoral

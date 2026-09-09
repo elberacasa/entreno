@@ -124,9 +124,16 @@ export function sessionSetCount(session: Session): number {
   );
 }
 
-/** 1RM estimado (Epley). */
+/**
+ * 1RM estimado (Epley).
+ *
+ * Por encima de 12 repeticiones la fórmula se va: una serie de 20 sale con un
+ * máximo que nadie levantaría. Devolver 0 es decir «esto no lo sé», y quien lo
+ * pinte tiene que enseñar eso y no un número inventado.
+ */
 export function estimate1RM(weightKg: number, reps: number): number {
   if (!weightKg || !reps) return 0;
+  if (reps > 12) return 0;
   if (reps === 1) return weightKg;
   return weightKg * (1 + reps / 30);
 }
@@ -146,6 +153,32 @@ export function describeSet(set: SetLog, kind: SessionEntry['kind'], unit: 'kg' 
   const w = set.weightKg ? `${num(toDisplayWeight(set.weightKg, unit))} ${unit}` : null;
   const r = set.reps ? `${set.reps} reps` : null;
   return [w, r].filter(Boolean).join(' × ') || '—';
+}
+
+/**
+ * Todas las series completadas de un ejercicio en una línea, para la
+ * referencia de «la última vez».
+ *
+ * Cuando el peso no cambia —que es casi siempre— se dice una vez y detrás van
+ * las repeticiones: «40 kg × 5·5·5·5·4». Así caben las cinco series, y la
+ * última, que es la que decide si toca subir peso, deja de quedarse fuera.
+ */
+export function describeSetRun(
+  sets: SetLog[],
+  kind: SessionEntry['kind'],
+  unit: 'kg' | 'lb',
+): string {
+  const done = sets.filter(isDone);
+  if (done.length === 0) return '—';
+
+  const full = done.map((s) => describeSet(s, kind, unit)).join('  ·  ');
+  if (kind !== 'strength' || done.length < 2) return full;
+
+  const weight = done[0].weightKg;
+  if (!weight) return full;
+  if (done.some((s) => s.weightKg !== weight || !s.reps)) return full;
+
+  return `${num(toDisplayWeight(weight, unit))} ${unit} × ${done.map((s) => s.reps).join('·')}`;
 }
 
 /** "1 serie" / "3 series": concuerda el número con el sustantivo. */

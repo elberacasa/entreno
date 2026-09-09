@@ -19,9 +19,9 @@ exportación e importación de copias de seguridad en Ajustes.
   completo. Solo propone ejercicios que puedas hacer con lo que tienes, reparte
   la semana según los días y ajusta series, repeticiones y descansos al
   objetivo, cabiendo en el tiempo que dijiste tener.
-- **Catálogo de rutinas**: 21 rutinas ya montadas, una por cada combinación de
-  nivel (fácil / media / difícil) y zona (empuje, tirón, piernas, core, brazos,
-  tren superior, tren inferior). Se filtran también por el material que tienes,
+- **Catálogo de rutinas**: 24 rutinas ya montadas, una por cada combinación de
+  nivel (fácil / media / difícil) y zona (cuerpo completo, empuje, tirón,
+  piernas, core, brazos, tren superior, tren inferior). Se filtran por material,
   se ven enteras antes de decidir y se copian a tus rutinas de un toque. A
   diferencia del plan recomendado, no hace falta contestar el cuestionario.
 - **Registro en el gimnasio**: abres la rutina y vas marcando series. Cada
@@ -134,7 +134,7 @@ src/
     storage.ts            AsyncStorage, export/import
     stats.ts              series temporales, récords, totales por semana
     recommend.ts          generador de rutinas a partir del cuestionario
-    routine-catalog.ts    las 21 rutinas fijas del catálogo
+    routine-catalog.ts    las 24 rutinas fijas del catálogo
     demos.ts              fotogramas por ejercicio (generado, no editar)
     format.ts             formato de pesos, tiempos, ritmos y plurales
     seed.ts               catálogo inicial de ejercicios
