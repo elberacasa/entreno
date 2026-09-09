@@ -18,7 +18,7 @@ import {
 import { Spacing } from '@/constants/theme';
 import { pickBackup, saveBackup } from '@/lib/backup-file';
 import { formatDuration, num, parseDuration, parseNum } from '@/lib/format';
-import { exportPayload, loadAll, parseBackup, wipeAll } from '@/lib/storage';
+import { exportPayload, loadAll, parseBackup, readBroken, wipeAll } from '@/lib/storage';
 import { useStore } from '@/lib/store';
 
 /**
@@ -107,8 +107,17 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
       destructive: true,
     });
     if (!ok) return;
-    store.replaceAll(data);
-    await notify({ title: 'Copia restaurada', message: 'Tus datos ya son los del backup.' });
+    // Nada de anunciar la restauración antes de saber si cuajó: decirle a
+    // alguien que tiene una copia que no tiene es peor que decirle que falló.
+    const failed = await store.replaceAll(data);
+    await notify(
+      failed
+        ? {
+            title: 'La copia no se guardó entera',
+            message: `Los datos del backup ya se ven en la app, pero falló al guardar ${failed} en el teléfono: si cierras ahora, eso se pierde. Libera espacio y vuelve a importar la copia.`,
+          }
+        : { title: 'Copia restaurada', message: 'Tus datos ya son los del backup.' },
+    );
   };
 
   const importFile = async () => {
@@ -149,6 +158,48 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
     }
   };
 
+  /**
+   * Lo que no se pudo leer se puede copiar tal cual antes de descartarlo: es
+   * el único hilo del que tirar si el JSON solo estaba cortado por la mitad.
+   */
+  const copyUnreadable = async () => {
+    const raw = await readBroken(store.broken);
+    await notify(
+      (await copy(raw))
+        ? {
+            title: 'Copiado',
+            message:
+              'Tienes en el portapapeles lo que la app no supo leer. Pégalo en una nota antes de descartarlo.',
+          }
+        : {
+            title: 'No se pudo copiar',
+            message: 'El navegador no dio permiso para escribir en el portapapeles.',
+          },
+    );
+  };
+
+  const discardUnreadable = async () => {
+    const ok = await confirm({
+      title: 'Descartar lo que no se lee',
+      message: `Lo que hay en ${store.readError} se aparta a un lado y la app empieza de cero con eso. Sigue guardado en el teléfono por si algún día se puede rescatar, pero la app ya no lo mirará.`,
+      confirmText: 'Descartar',
+      destructive: true,
+    });
+    if (!ok) return;
+    const failed = await store.discardBroken();
+    await notify(
+      failed
+        ? {
+            title: 'Descartado, pero sin respaldo',
+            message: `La app ya vuelve a guardar con normalidad, pero no se pudo apartar lo de ${failed}: si escribes encima, se pierde.`,
+          }
+        : {
+            title: 'Descartado',
+            message: 'La app ya vuelve a guardar con normalidad.',
+          },
+    );
+  };
+
   const reset = async () => {
     const ok = await confirm({
       title: 'Borrar todos los datos',
@@ -157,16 +208,35 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
       destructive: true,
     });
     if (!ok) return;
-    await wipeAll();
+
+    try {
+      await wipeAll();
+    } catch (e) {
+      // Si el teléfono no deja borrar, lo que no puede pasar es que la app
+      // diga que ya está: los datos siguen ahí y el usuario tiene que saberlo.
+      await notify({
+        title: 'No se pudieron borrar los datos',
+        message: `El teléfono no dejó vaciar el almacenamiento (${String(e)}). Tus datos siguen donde estaban.`,
+      });
+      return;
+    }
+
     // Borrar el disco no basta: el estado en memoria seguía intacto y la
     // siguiente cosa que tocaras -las unidades, el descanso- lo reescribía
     // entero. Se vuelve a cargar, que es lo mismo que ve una instalación
     // nueva: catálogo de ejercicios y nada más.
-    store.replaceAll(await loadAll());
-    await notify({
-      title: 'Datos borrados',
-      message: 'Se fueron las rutinas, los entrenos y los ejercicios que habías añadido.',
-    });
+    const failed = await store.replaceAll((await loadAll()).data);
+    await notify(
+      failed
+        ? {
+            title: 'Datos borrados, pero a medias',
+            message: `Se borró todo, aunque falló al guardar ${failed}. La app funciona, pero lo que hagas ahora puede no sobrevivir a cerrarla.`,
+          }
+        : {
+            title: 'Datos borrados',
+            message: 'Se fueron las rutinas, los entrenos y los ejercicios que habías añadido.',
+          },
+    );
   };
 
   return (
@@ -178,6 +248,33 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
           paddingBottom: Spacing.seven,
         }}
         keyboardShouldPersistTaps="handled">
+        {store.broken.length > 0 ? (
+          <>
+            <SectionHeader title="Datos que no se pudieron leer" />
+            <Card style={{ gap: Spacing.four }}>
+              <Text variant="body" dim style={{ lineHeight: 21 }}>
+                Hay algo guardado en {store.readError} que la app no entiende. Está intacto y no se
+                va a sobrescribir, pero mientras siga así no se guardará nada nuevo ahí. Cópialo
+                primero por si se puede rescatar, o restaura una copia de seguridad desde aquí
+                abajo, que también lo aparta.
+              </Text>
+              <View style={{ gap: Spacing.two }}>
+                <Button
+                  title="Copiar lo que no se lee"
+                  icon="copy-outline"
+                  variant="secondary"
+                  onPress={copyUnreadable}
+                />
+                <Button
+                  title="Descartar y empezar de cero"
+                  variant="danger"
+                  onPress={discardUnreadable}
+                />
+              </View>
+            </Card>
+          </>
+        ) : null}
+
         <SectionHeader title="Tus datos" />
         <Card>
           <Row style={{ alignItems: 'flex-start' }} gap={Spacing.four}>

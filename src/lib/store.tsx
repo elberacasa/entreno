@@ -1,7 +1,18 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { uid } from '@/lib/id';
-import { loadAll, save, type AppData } from '@/lib/storage';
+import {
+  KEYS,
+  KEY_LABEL,
+  loadAll,
+  loadRest,
+  save,
+  saveRest,
+  stashBroken,
+  type AppData,
+  type RestState,
+  type StorageKey,
+} from '@/lib/storage';
 import {
   DEFAULT_SETTINGS,
   type Exercise,
@@ -17,10 +28,23 @@ import {
 interface Store extends AppData {
   ready: boolean;
   /**
-   * Qué no se pudo guardar en el teléfono, si es que algo falló. Mientras
-   * tenga valor, lo que hay en pantalla existe solo en memoria.
+   * Qué no se pudo guardar en el teléfono, si es que algo falló. Se acuerda de
+   * cada clave por separado: un guardado que va bien no puede tapar el fallo
+   * de otro, que era lo que pasaba antes.
    */
   saveError: string | null;
+  /**
+   * Qué hay guardado que no se pudo leer. Mientras tenga valor, esas claves no
+   * se escriben: lo del usuario sigue intacto en el teléfono y solo él decide
+   * si se descarta.
+   */
+  readError: string | null;
+  broken: StorageKey[];
+  /**
+   * Aparta lo ilegible a una clave de respaldo y vuelve a permitir escribir.
+   * Devuelve qué no se pudo apartar, para no prometer un respaldo que no está.
+   */
+  discardBroken: () => Promise<string | null>;
 
   // Catálogo
   addExercise: (e: Omit<Exercise, 'id'>) => Exercise;
@@ -63,7 +87,15 @@ interface Store extends AppData {
   // Ajustes
   updateSettings: (patch: Partial<Settings>) => void;
 
-  replaceAll: (data: AppData) => void;
+  /**
+   * Descanso en curso. Vive aquí y no en el componente para que salir de la
+   * sesión -o recargar la app- no se lleve la cuenta atrás por delante.
+   */
+  rest: RestState | null;
+  setRest: (rest: RestState | null) => void;
+
+  /** Devuelve qué no se pudo guardar, igual que `upsertRoutine`. */
+  replaceAll: (data: AppData) => Promise<string | null>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -76,108 +108,161 @@ const EMPTY: AppData = {
   settings: DEFAULT_SETTINGS,
 };
 
+/** Qué clave del disco guarda cada parte de los datos. */
+const FIELD_KEY: { [K in keyof AppData]: StorageKey } = {
+  exercises: KEYS.exercises,
+  routines: KEYS.routines,
+  sessions: KEYS.sessions,
+  schedule: KEYS.schedule,
+  settings: KEYS.settings,
+};
+
+function writeField<K extends keyof AppData>(field: K, value: AppData[K]): Promise<void> {
+  return (save[field] as (v: AppData[K]) => Promise<void>)(value);
+}
+
+/** "los entrenos", "los entrenos y las rutinas", "a, b y c". */
+function joinList(items: string[]): string | null {
+  if (items.length === 0) return null;
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY);
   const [ready, setReady] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [failedKeys, setFailedKeys] = useState<Partial<Record<StorageKey, true>>>({});
+  const [broken, setBroken] = useState<StorageKey[]>([]);
+  const [rest, putRest] = useState<RestState | null>(null);
+
+  /**
+   * Lo que hay ahora mismo, para calcular las escrituras. Antes cada mutación
+   * se hacía dentro del actualizador de `setData`: eso evitaba pisar los
+   * cambios del mismo tick, pero metía un efecto secundario -guardar- en una
+   * función que tiene que ser pura, que es justo lo que el React Compiler no
+   * permite. Con la referencia se consigue lo mismo desde fuera.
+   */
+  const dataRef = useRef<AppData>(EMPTY);
+  const brokenRef = useRef<StorageKey[]>([]);
 
   /**
    * Guardar puede fallar -en web esto es localStorage, y Safari lo bloquea o
    * lo llena-, y hasta ahora nadie miraba el resultado: la serie aparecía
    * marcada en pantalla, viva solo en memoria, y al recargar ya no estaba.
-   * Ahora un fallo deja rastro para que la app pueda avisar.
+   * Ahora un fallo deja rastro, por clave, para que la app pueda avisar.
    */
-  const persist = (write: Promise<void>, what: string, done?: (failed: string | null) => void) => {
-    write.then(
+  const persist = (key: StorageKey, write: () => Promise<void>): Promise<string | null> => {
+    if (brokenRef.current.includes(key)) {
+      // Ahí hay algo del usuario que no se pudo leer. Escribir encima lo
+      // destruiría para siempre, así que no se escribe hasta que él decida.
+      return Promise.resolve(KEY_LABEL[key]);
+    }
+    return write().then(
       () => {
-        setSaveError(null);
-        done?.(null);
+        setFailedKeys((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        return null;
       },
       () => {
-        setSaveError(what);
-        done?.(what);
+        setFailedKeys((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+        return KEY_LABEL[key];
       },
     );
   };
 
   useEffect(() => {
     let alive = true;
-    loadAll().then((loaded) => {
-      if (!alive) return;
-      setData(loaded);
-      setReady(true);
-    });
+    Promise.all([loadAll(), loadRest()])
+      .then(([loaded, storedRest]) => {
+        if (!alive) return;
+        dataRef.current = loaded.data;
+        brokenRef.current = loaded.broken;
+        setData(loaded.data);
+        setBroken(loaded.broken);
+        putRest(storedRest);
+        setReady(true);
+      })
+      .catch(() => {
+        if (!alive) return;
+        // No se sabe qué hay guardado, así que no se toca nada: se bloquean
+        // todas las claves y la app arranca vacía pero sin destruir nada.
+        const all = Object.values(KEYS);
+        brokenRef.current = all;
+        setBroken(all);
+        setReady(true);
+      });
     return () => {
       alive = false;
     };
   }, []);
 
+  const saveError = useMemo(
+    () => joinList(Object.values(KEYS).filter((k) => failedKeys[k]).map((k) => KEY_LABEL[k])),
+    [failedKeys],
+  );
+
+  const readError = useMemo(
+    () => joinList(Object.values(KEYS).filter((k) => broken.includes(k)).map((k) => KEY_LABEL[k])),
+    [broken],
+  );
+
   const value = useMemo<Store>(() => {
     const { exercises, routines, sessions, schedule, settings } = data;
 
     /**
-     * Todas las escrituras parten de la lista actual, no de la del render.
-     * Si tomaran la del render, dos llamadas seguidas en el mismo tick (añadir
-     * las seis rutinas de un plan, por ejemplo) se pisarían y solo quedaría la
-     * última.
+     * Cambia una parte de los datos y la guarda. El valor nuevo se calcula
+     * fuera de React, a partir de `dataRef`, para que dos llamadas seguidas en
+     * el mismo tick -añadir las seis rutinas de un plan, por ejemplo- no se
+     * pisen y solo quede la última.
      */
-    const mutateExercises = (fn: (list: Exercise[]) => Exercise[]) => {
-      setData((d) => {
-        const next = fn(d.exercises);
-        persist(save.exercises(next), 'los ejercicios');
-        return { ...d, exercises: next };
-      });
-    };
-
-    /**
-     * Devuelve una promesa con el resultado del guardado. No se puede sacar de
-     * `setData` porque React ejecuta el actualizador cuando le viene bien, así
-     * que la promesa se crea antes y se resuelve desde dentro.
-     */
-    const mutateRoutines = (fn: (list: Routine[]) => Routine[]): Promise<string | null> => {
-      let settle: (failed: string | null) => void = () => {};
-      const saved = new Promise<string | null>((resolve) => {
-        settle = resolve;
-      });
-      setData((d) => {
-        const next = fn(d.routines);
-        persist(save.routines(next), 'las rutinas', settle);
-        return { ...d, routines: next };
-      });
-      return saved;
-    };
-
-    const mutateSessions = (fn: (list: Session[]) => Session[]) => {
-      setData((d) => {
-        const next = fn(d.sessions);
-        persist(save.sessions(next), 'los entrenos');
-        return { ...d, sessions: next };
-      });
-    };
-
-    const mutateSchedule = (fn: (list: ScheduledSession[]) => ScheduledSession[]) => {
-      setData((d) => {
-        const next = fn(d.schedule);
-        persist(save.schedule(next), 'la agenda');
-        return { ...d, schedule: next };
-      });
+    const mutate = <K extends keyof AppData>(
+      field: K,
+      fn: (current: AppData[K]) => AppData[K],
+    ): Promise<string | null> => {
+      const next = fn(dataRef.current[field]);
+      dataRef.current = { ...dataRef.current, [field]: next };
+      setData(dataRef.current);
+      return persist(FIELD_KEY[field], () => writeField(field, next));
     };
 
     return {
       ...data,
       ready,
       saveError,
+      readError,
+      broken,
+      rest,
+
+      async discardBroken() {
+        const keys = brokenRef.current;
+        if (keys.length === 0) return null;
+        const failed = await stashBroken(keys);
+        brokenRef.current = [];
+        setBroken([]);
+        return joinList(failed.map((k) => KEY_LABEL[k]));
+      },
+
+      setRest(next) {
+        putRest(next);
+        saveRest(next);
+      },
 
       addExercise(e) {
         const created: Exercise = { ...e, id: uid('ex-'), custom: true };
-        mutateExercises((list) => [...list, created]);
+        void mutate('exercises', (list) => [...list, created]);
         return created;
       },
       updateExercise(id, patch) {
-        mutateExercises((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+        void mutate('exercises', (list) =>
+          list.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+        );
       },
       deleteExercise(id) {
-        mutateExercises((list) => list.filter((e) => e.id !== id));
+        void mutate('exercises', (list) => list.filter((e) => e.id !== id));
       },
       exerciseById(id) {
         return exercises.find((e) => e.id === id);
@@ -185,16 +270,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       upsertRoutine(r) {
         const stamped = { ...r, updatedAt: new Date().toISOString() };
-        return mutateRoutines((list) =>
+        return mutate('routines', (list) =>
           list.some((x) => x.id === r.id)
             ? list.map((x) => (x.id === r.id ? stamped : x))
             : [...list, stamped],
         );
       },
       deleteRoutine(id) {
-        mutateRoutines((list) => list.filter((r) => r.id !== id));
+        void mutate('routines', (list) => list.filter((r) => r.id !== id));
         // Si la rutina ya no existe, lo que tuviera en la agenda tampoco.
-        mutateSchedule((list) => list.filter((s) => s.routineId !== id));
+        void mutate('schedule', (list) => list.filter((s) => s.routineId !== id));
       },
       duplicateRoutine(id) {
         const source = routines.find((r) => r.id === id);
@@ -208,7 +293,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           createdAt: now,
           updatedAt: now,
         };
-        mutateRoutines((list) => [...list, copy]);
+        void mutate('routines', (list) => [...list, copy]);
         return copy;
       },
       routineById(id) {
@@ -222,15 +307,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           at: at.toISOString(),
           createdAt: new Date().toISOString(),
         };
-        mutateSchedule((list) => [...list, entry]);
+        void mutate('schedule', (list) => [...list, entry]);
       },
       rescheduleSession(id, at) {
-        mutateSchedule((list) =>
+        void mutate('schedule', (list) =>
           list.map((s) => (s.id === id ? { ...s, at: at.toISOString() } : s)),
         );
       },
       unschedule(id) {
-        mutateSchedule((list) => list.filter((s) => s.id !== id));
+        void mutate('schedule', (list) => list.filter((s) => s.id !== id));
       },
       upcoming() {
         // Lo atrasado sigue en la lista a propósito: si no lo hiciste ayer,
@@ -257,14 +342,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             planItemToEntry(item, exercises, settings),
           ),
         };
-        mutateSessions((list) => [session, ...list]);
+        void mutate('sessions', (list) => [session, ...list]);
         return session;
       },
       updateSession(id, patch) {
-        mutateSessions((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+        void mutate('sessions', (list) =>
+          list.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        );
       },
       finishSession(id) {
-        mutateSessions((list) =>
+        void mutate('sessions', (list) =>
           list.map((s) =>
             s.id === id
               ? {
@@ -280,7 +367,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         );
       },
       deleteSession(id) {
-        mutateSessions((list) => list.filter((s) => s.id !== id));
+        void mutate('sessions', (list) => list.filter((s) => s.id !== id));
       },
 
       lastEntryFor(exerciseId, excludeSessionId) {
@@ -296,23 +383,37 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
 
       updateSettings(patch) {
-        setData((d) => {
-          const next = { ...d.settings, ...patch };
-          persist(save.settings(next), 'los ajustes');
-          return { ...d, settings: next };
-        });
+        void mutate('settings', (current) => ({ ...current, ...patch }));
       },
 
-      replaceAll(next) {
+      async replaceAll(next) {
+        // Restaurar una copia es la decisión del usuario sobre lo que no se
+        // pudo leer: se aparta a una clave de respaldo antes de pisarlo, y a
+        // partir de ahí esas claves vuelven a admitir escrituras.
+        if (brokenRef.current.length > 0) {
+          await stashBroken(brokenRef.current);
+          brokenRef.current = [];
+          setBroken([]);
+        }
+
+        dataRef.current = next;
         setData(next);
-        persist(save.exercises(next.exercises), 'los ejercicios');
-        persist(save.routines(next.routines), 'las rutinas');
-        persist(save.sessions(next.sessions), 'los entrenos');
-        persist(save.schedule(next.schedule), 'la agenda');
-        persist(save.settings(next.settings), 'los ajustes');
+
+        const failed = await Promise.all([
+          persist(KEYS.exercises, () => save.exercises(next.exercises)),
+          persist(KEYS.routines, () => save.routines(next.routines)),
+          persist(KEYS.sessions, () => save.sessions(next.sessions)),
+          persist(KEYS.schedule, () => save.schedule(next.schedule)),
+          persist(KEYS.settings, () => save.settings(next.settings)),
+        ]);
+
+        return joinList(failed.filter((f): f is string => f != null));
       },
     };
-  }, [data, ready, saveError]);
+    // `persist` y `mutate` se apoyan en refs y en setters de estado, que no
+    // cambian entre renders; lo que sí hay que recalcular es todo lo que lee
+    // de `data`.
+  }, [data, ready, saveError, readError, broken, rest]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
