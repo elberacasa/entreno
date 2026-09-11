@@ -2,7 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { DemoThumb, ExerciseDemoSheet } from '@/components/exercise-demo';
-import { Button, Row, Screen, Text } from '@/components/ui';
+import { Button, IconButton, Row, Screen, Text } from '@/components/ui';
 import { useStore } from '@/lib/store';
 import { primaryGroups } from '@/lib/weekly-plan';
 import { estimateMinutes } from '@/lib/recommend';
@@ -23,7 +23,18 @@ export default function RoutinePreview() {
     );
   return (
     <Screen edges={[]}>
-      <Stack.Screen options={{ title: 'Tu sesión', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen
+        options={{
+          title: 'Tu sesión',
+          headerLeft: () => (
+            <IconButton
+              name="arrow-back"
+              accessibilityLabel="Volver"
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            />
+          ),
+        }}
+      />
       <ScrollView contentContainerStyle={{ padding: 20, gap: 22, paddingBottom: 44 }}>
         <Text variant="display">{routine.name}</Text>
         <Text dim>{primaryGroups(routine.items, store.exercises).join(' · ')}</Text>
