@@ -992,6 +992,7 @@ function SetRow({
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{ checked: set.done }}
+          aria-checked={set.done}
           accessibilityLabel={`Completar serie ${index} de ${exerciseName}`}
           onPress={() => {
             const invalid = columns.some((col) => {

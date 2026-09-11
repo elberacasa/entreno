@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
@@ -46,6 +46,8 @@ function Recommended() {
   const store = useStore();
   const { notify } = useDialog();
   const [wizard, setWizard] = useState({ open: !store.settings.profile, seq: 0 });
+  const addingRef = useRef(false);
+  const [adding, setAdding] = useState(false);
   const [demo, setDemo] = useState<Exercise | null>(null);
 
   const profile = store.settings.profile ?? null;
@@ -68,7 +70,9 @@ function Recommended() {
   };
 
   const addDays = async (days: PlanDay[]) => {
-    if (!profile) return;
+    if (!profile || addingRef.current) return;
+    addingRef.current = true;
+    setAdding(true);
     // Los nombres se calculan sobre la marcha para que dos días del mismo plan
     // no acaben llamándose igual.
     const taken = store.routines.map((r) => r.name);
@@ -84,25 +88,26 @@ function Recommended() {
     // tiene hasta que recarga y ya no están.
     const one = days.length === 1;
     const failed = (await Promise.all(saving)).find(Boolean);
+    addingRef.current = false;
+    setAdding(false);
     if (failed) {
       await notify({
         title: one ? 'Añadida, pero sin guardar' : 'Añadidas, pero sin guardar',
         message: `${
           one ? 'La rutina está' : `Las ${days.length} rutinas están`
-        } en Rutinas, pero el teléfono no ha podido guardar ${failed}: si cierras la app se ${
+        } en Plan, pero el teléfono no ha podido guardar ${failed}: si cierras la app se ${
           one ? 'pierde' : 'pierden'
         }. Copia el backup desde Ajustes antes de seguir.`,
       });
-      router.back();
+      router.replace('/routines');
       return;
     }
 
     await notify({
       title: one ? 'Rutina añadida' : `${days.length} rutinas añadidas`,
-      message:
-        'Ya las tienes en Rutinas, listas para empezar. Puedes editarlas como cualquier otra.',
+      message: 'Ya las tienes en Plan, listas para empezar. Puedes editarlas como cualquier otra.',
     });
-    router.back();
+    router.replace('/routines');
   };
 
   return (
@@ -240,6 +245,7 @@ function Recommended() {
 
                 <Button
                   title="Añadir esta rutina"
+                  loading={adding}
                   icon="add"
                   variant="secondary"
                   small
@@ -251,6 +257,7 @@ function Recommended() {
             {plan && plan.days.length > 0 ? (
               <Button
                 title={`Añadir las ${plan.days.length} rutinas`}
+                loading={adding}
                 icon="checkmark-done"
                 onPress={() => addDays(plan.days)}
               />

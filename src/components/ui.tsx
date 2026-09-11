@@ -309,6 +309,8 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
+      aria-disabled={Boolean(disabled || loading)}
+      aria-busy={Boolean(loading)}
       {...rest}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -499,6 +501,7 @@ export function Chip({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: Boolean(selected) }}
+      aria-pressed={Boolean(selected)}
       onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
@@ -556,6 +559,7 @@ export function Segmented<T extends string>({
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ checked: active }}
+            aria-checked={active}
             onPress={() => onChange(o.value)}
             style={({ pressed }) => ({
               flex: 1,

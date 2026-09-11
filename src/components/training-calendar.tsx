@@ -58,6 +58,7 @@ export function TrainingCalendar({
                 key={key}
                 accessibilityRole="button"
                 accessibilityState={{ selected: chosen }}
+                aria-pressed={chosen}
                 accessibilityLabel={`${date.toLocaleDateString('es', { day: 'numeric', month: 'long' })}, ${count} sesiones`}
                 onPress={() => onSelect(key)}
                 style={({ pressed }) => ({

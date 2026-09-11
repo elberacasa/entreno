@@ -50,6 +50,7 @@ function OptionRow({
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: selected }}
+      aria-checked={selected}
       accessibilityLabel={title}
       onPress={onPress}
       style={({ pressed }) => ({
