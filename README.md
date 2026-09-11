@@ -10,12 +10,22 @@ mismo código puede compilarse también como app nativa si algún día hace falt
 Todo se guarda **en el propio teléfono** (no hay cuenta ni servidor). Hay
 exportación e importación de copias de seguridad en Ajustes.
 
+## Experiencia renovada
+
+- **Hoy** prioriza el siguiente entrenamiento, muestra la actividad de la semana y ofrece un acceso directo al plan para quien empieza.
+- **Plan por experiencia**: el cuestionario incluye experiencia; la opción inicial de hasta tres días usa cuerpo completo. El material se comprueba también para la rueda abdominal.
+- **Menos escritura**: cada ejercicio trae los valores de su última sesión completada. El esfuerzo es opcional, los campos tienen etiquetas accesibles y los valores incorrectos se explican antes de completar la serie.
+- **Resumen al terminar**: tiempo, series y récords comparables. Solo se anuncia que el entreno está guardado después de confirmar la escritura.
+- **Borradores de rutinas**: los cambios se conservan en este navegador aunque se recargue la pantalla. Guardar valida los objetivos y avisa si falla.
+- **Persistencia v2**: un único snapshot versionado guarda el conjunto de datos. Las escrituras se ordenan y restaurar una copia es una sola operación; si falla, los datos anteriores siguen intactos. Se leen las claves antiguas y se conservan durante la migración.
+- **Offline**: la instalación descarga el shell y sus recursos antes de activar el service worker. Las versiones del HTML y sus recursos se actualizan juntas.
+
 ## Qué hace
 
 - **Rutinas**: prepara tus entrenos por adelantado — ejercicios, series objetivo,
   reps, peso, distancia, tiempo y descanso.
-- **Plan recomendado**: un cuestionario de cuatro pasos (material disponible,
-  días por semana, minutos por sesión y objetivo) del que sale un plan semanal
+- **Plan recomendado**: un cuestionario de cinco pasos (material disponible,
+  días por semana, minutos por sesión, objetivo y experiencia) del que sale un plan semanal
   completo. Solo propone ejercicios que puedas hacer con lo que tienes, reparte
   la semana según los días y ajusta series, repeticiones y descansos al
   objetivo, cabiendo en el tiempo que dijiste tener.
@@ -76,8 +86,10 @@ npm run icons      # regenera los iconos PNG desde el SVG
 Comprobaciones:
 
 ```bash
-npx tsc --noEmit
+npm run check     # tipos de app y tests, lint y pruebas automáticas
+npm run typecheck
 npm run lint
+npm test
 ```
 
 ## Agentes
@@ -171,3 +183,11 @@ muestran e introducen.
 En la web los datos viven en el `localStorage` del navegador. Son de ese
 navegador y ese dispositivo: si borras los datos del sitio, se van. Por eso
 existe la exportación de copias en Ajustes.
+
+### Comprobaciones de esta versión
+
+27 pruebas cubren validación de backups, migración, guardado interrumpido, orden de escrituras, conflictos entre pestañas, recuperación, unidades, récords, restricciones de material e instalación offline. Los pull requests y los despliegues ejecutan las comprobaciones y la build de producción.
+
+La revisión manual local verificó el flujo completo hasta el resumen, la conservación del historial anterior, recuperación de borradores, conversión kg/lb y recarga de una ruta del catálogo con el servidor de pruebas apagado. Se revisaron vistas de 390 × 844 y escritorio. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
+
+Las claves originales `wk.*.v1` se conservan como respaldo de migración; `wk.data.v2` es la fuente actual después del primer guardado. No vuelvas a una versión antigua para continuar registrando datos: esa versión no conoce el snapshot nuevo. Los borradores `wk.draft.*` son independientes del backup de rutinas guardadas.
