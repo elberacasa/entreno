@@ -6,6 +6,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-vercel/
+.vercel/
 web-build/
 expo-env.d.ts
 

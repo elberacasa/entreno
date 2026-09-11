@@ -191,3 +191,19 @@ existe la exportación de copias en Ajustes.
 La revisión manual local verificó el flujo completo hasta el resumen, la conservación del historial anterior, recuperación de borradores, conversión kg/lb y recarga de una ruta del catálogo con el servidor de pruebas apagado. Se revisaron vistas de 390 × 844 y escritorio. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
 
 Las claves originales `wk.*.v1` se conservan como respaldo de migración; `wk.data.v2` es la fuente actual después del primer guardado. No vuelvas a una versión antigua para continuar registrando datos: esa versión no conoce el snapshot nuevo. Los borradores `wk.draft.*` son independientes del backup de rutinas guardadas.
+
+### Vercel deployment
+
+The Vercel project connects to `elberacasa/entreno`. Pushes to
+`feat/entreno-revamp` create preview deployments. The build runs type checks,
+lint, all tests, and the Expo web export before publishing static files.
+
+`scripts/prepare-vercel.mjs` places the export under `/entreno/`, preserving
+the same asset paths, PWA scope, and client routes as local previews and
+GitHub Pages. `vercel.json` redirects the site root and serves the app shell
+for deep links. The service worker is revalidated on each update check.
+
+Share one stable branch alias when testing updates. Browser storage belongs
+to the URL's origin: different deployment domains have separate data.
+Export a backup before moving to another domain. No workout data is sent to
+a database, and clearing site data removes locally stored workouts.
