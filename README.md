@@ -14,9 +14,9 @@ exportación e importación de copias de seguridad en Ajustes.
 
 - **Identidad propia**: logo SVG original con grupos preparados para animación,
   iconos PWA generados y tipografías locales con sus licencias.
-- **Entrenar**: próxima rutina, agenda semanal y una acción principal clara.
-  En escritorio el progreso y las últimas sesiones se muestran a su lado.
-- **Tu plan**: rutinas primero; edición, duplicado y compartir en un menú.
+- **Entrenar**: primera semana visible desde el inicio y guardado en un toque.
+  Después muestra la sesión de hoy, su finalización o el descanso previsto.
+- **Tu plan**: semana recurrente primero; biblioteca personal y edición después.
   Importa archivos de rutina con revisión previa, sin reemplazar el historial.
 - **Modo de enfoque**: un ejercicio a la vez o toda la sesión. Consulta la
   última referencia, cambia de ejercicio y conserva cada serie registrada.
@@ -39,16 +39,21 @@ incluye la rutina y sus ejercicios, nunca sesiones, peso corporal ni perfil.
 
 - **Rutinas**: prepara tus entrenos por adelantado — ejercicios, series objetivo,
   reps, peso, distancia, tiempo y descanso.
-- **Plan recomendado**: un cuestionario de cinco pasos (material disponible,
-  días por semana, minutos por sesión, objetivo y experiencia) del que sale un plan semanal
-  completo. Solo propone ejercicios que puedas hacer con lo que tienes, reparte
-  la semana según los días y ajusta series, repeticiones y descansos al
-  objetivo, cabiendo en el tiempo que dijiste tener.
+- **Plan semanal**: vista previa inmediata, de 2 a 6 días, material, tiempo,
+  experiencia y prioridad muscular. Una sola operación guarda rutinas y días.
+  Reconfigurar actualiza las rutinas asignadas sin duplicarlas ni tocar sesiones.
+  Los avisos de material y tiempo aparecen antes de guardar.
+  El reparto usa plantillas propias informadas por la
+  [guía ACSM 2026](https://acsm.org/resistance-training-guidelines-update-2026/):
+  cuerpo completo con 2–3 días, torso/pierna con 4, y empuje/tirón/pierna
+  con 5–6. Las dosis iniciales y selección de ejercicios son decisiones de
+  programación de la app, no una prescripción individual ni una medida de recuperación.
+  El resumen muscular cuenta series y días reales del plan por grupo principal.
 - **Catálogo de rutinas**: 24 rutinas ya montadas, una por cada combinación de
   nivel (fácil / media / difícil) y zona (cuerpo completo, empuje, tirón,
   piernas, core, brazos, tren superior, tren inferior). Se filtran por material,
   se ven enteras antes de decidir y se copian a tus rutinas de un toque. A
-  diferencia del plan recomendado, no hace falta contestar el cuestionario.
+  también puedes explorar el catálogo sin configurar una semana.
 - **Registro en el gimnasio**: abres la rutina y vas marcando series. Cada
   ejercicio muestra qué hiciste la última vez para saber si estás progresando.
 - **Tres tipos de ejercicio**:
@@ -65,7 +70,7 @@ incluye la rutina y sus ejercicios, nunca sesiones, peso corporal ni perfil.
 - **Historial** de todas las sesiones, agrupado por mes, con volumen y kilómetros.
 - **Progreso**: volumen / entrenos / distancia por semana, y por ejercicio la
   evolución del 1RM estimado, la distancia o la mejor plancha, con tus récords.
-- Catálogo con ~50 ejercicios de inicio, ampliable con los tuyos.
+- Catálogo con 61 ejercicios de inicio, ampliable con los tuyos.
 
 ## Instalarla en el iPhone
 
@@ -160,7 +165,8 @@ src/
     store.tsx             estado global + persistencia
     storage.ts            AsyncStorage, export/import
     stats.ts              series temporales, récords, totales por semana
-    recommend.ts          generador de rutinas a partir del cuestionario
+    recommend.ts          estimaciones y generador de rutinas previo
+    weekly-plan.ts        reparto semanal, músculos y calendario recurrente
     routine-catalog.ts    las 24 rutinas fijas del catálogo
     demos.ts              fotogramas por ejercicio (generado, no editar)
     format.ts             formato de pesos, tiempos, ritmos y plurales
@@ -201,9 +207,9 @@ existe la exportación de copias en Ajustes.
 
 ### Comprobaciones de esta versión
 
-39 pruebas cubren validación de backups, migración, guardado interrumpido, orden de escrituras, conflictos entre pestañas, recuperación, unidades, récords, restricciones de material e instalación offline. Los pull requests y los despliegues ejecutan las comprobaciones y la build de producción.
+63 pruebas cubren validación de backups, migración, guardado interrumpido, orden de escrituras, conflictos entre pestañas, recuperación, unidades, récords, restricciones de material e instalación offline. Los pull requests y los despliegues ejecutan las comprobaciones y la build de producción.
 
-La revisión manual local verificó el cuestionario completo, registro y resumen, navegación por ejercicio, importación aditiva y rechazo de archivos inválidos, calendario, calculadora de discos y apariencia clara/oscura. Se revisaron vistas de 390 × 844 y 1280 × 900. Con el servidor de pruebas apagado se recargó una sesión abierta: conservó la serie registrada, las tipografías y el descanso. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
+La revisión manual local verificó la creación de una semana en un toque, su persistencia, el ajuste por músculos y el avance tras completar la sesión, además de registro y resumen, navegación por ejercicio, importación aditiva y rechazo de archivos inválidos, calendario, calculadora de discos y apariencia clara/oscura. Se revisaron vistas de 390 × 844 y 1280 × 900. Con el servidor de pruebas apagado se recargó una sesión abierta: conservó la serie registrada, las tipografías y el descanso. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
 
 Las claves originales `wk.*.v1` se conservan como respaldo de migración; `wk.data.v2` es la fuente actual después del primer guardado. No vuelvas a una versión antigua para continuar registrando datos: esa versión no conoce el snapshot nuevo. Los borradores `wk.draft.*` son independientes del backup de rutinas guardadas.
 
