@@ -48,16 +48,14 @@ export function parseDuration(text: string): number | null {
 export function pacePerKm(km: number, sec: number): string {
   if (!km || !sec) return '—';
   const secPerKm = sec / km;
-  const m = Math.floor(secPerKm / 60);
-  const s = Math.round(secPerKm % 60);
+  const rounded = Math.round(secPerKm);
+  const m = Math.floor(rounded / 60);
+  const s = rounded % 60;
   return `${m}:${String(s).padStart(2, '0')} /km`;
 }
 
 const DAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-const MONTHS = [
-  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
-];
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 export function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -110,18 +108,13 @@ export function sessionVolume(session: Session): number {
 
 export function sessionDistanceKm(session: Session): number {
   return session.entries.reduce(
-    (acc, e) =>
-      acc +
-      e.sets.reduce((a, s) => a + (s.done ? (s.distanceKm ?? 0) : 0), 0),
+    (acc, e) => acc + e.sets.reduce((a, s) => a + (s.done ? (s.distanceKm ?? 0) : 0), 0),
     0,
   );
 }
 
 export function sessionSetCount(session: Session): number {
-  return session.entries.reduce(
-    (acc, e) => acc + e.sets.filter((s) => s.done).length,
-    0,
-  );
+  return session.entries.reduce((acc, e) => acc + e.sets.filter((s) => s.done).length, 0);
 }
 
 /**
@@ -260,5 +253,5 @@ export function describePlanned(item: {
 }): string {
   if (item.kind === 'cardio') return formatDuration(item.durationSec);
   if (item.durationSec != null) return `${item.sets} × ${formatDuration(item.durationSec)}`;
-  return `${item.sets} × ${item.reps}`;
+  return item.reps != null ? `${item.sets} × ${item.reps}` : setsLabel(item.sets);
 }

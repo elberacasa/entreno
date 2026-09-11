@@ -96,12 +96,17 @@ export interface Records {
 }
 
 export function records(points: ExercisePoint[]): Records {
-  const best = <T,>(list: T[], pick: (t: T) => number) =>
+  const best = <T>(list: T[], pick: (t: T) => number) =>
     list.reduce((acc, t) => Math.max(acc, pick(t)), 0);
 
   const paces = points.map((p) => p.paceSecPerKm).filter((p): p is number => p != null);
   const topByWeight = points.reduce<ExercisePoint | null>(
-    (acc, p) => (acc == null || p.topWeightKg > acc.topWeightKg ? p : acc),
+    (acc, p) =>
+      acc == null ||
+      p.topWeightKg > acc.topWeightKg ||
+      (p.topWeightKg === acc.topWeightKg && p.topReps > acc.topReps)
+        ? p
+        : acc,
     null,
   );
 

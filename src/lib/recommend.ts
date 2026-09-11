@@ -322,7 +322,10 @@ export function buildPlan(profile: TrainingProfile, catalog: Exercise[]): Plan {
       .filter((e) => e.kind === 'cardio')
       .sort((a, b) => (uses.get(a.id) ?? 0) - (uses.get(b.id) ?? 0))[0];
 
-  const split = SPLITS[profile.daysPerWeek] ?? SPLITS[3];
+  const split: Focus[] =
+    profile.experience === 'beginner' && profile.daysPerWeek <= 3
+      ? Array.from({ length: profile.daysPerWeek }, () => 'full')
+      : (SPLITS[profile.daysPerWeek] ?? SPLITS[3]);
   const budgetSec = profile.minutesPerSession * 60;
 
   // El cardio nunca se come más de un cuarto de la sesión: si solo tienes 30
@@ -347,8 +350,14 @@ export function buildPlan(profile: TrainingProfile, catalog: Exercise[]): Plan {
 
     /** Intenta meter un ejercicio; devuelve false si ya no cabe o no hay. */
     const add = (pattern: Pattern, tier: Tier): boolean | 'empty' => {
+      if (profile.experience === 'beginner' && items.length >= 5) return false;
       const exercise = pick(pattern, tier, exclude);
       if (!exercise) return 'empty';
+      if (
+        pattern === 'core' &&
+        items.some((item) => SEED_META[item.exerciseId]?.pattern === 'core')
+      )
+        return 'empty';
 
       // La dosis la manda el ejercicio, no el hueco: si en un hueco de básico
       // acaba entrando un accesorio (unos gemelos, por ejemplo), no tiene
@@ -376,7 +385,11 @@ export function buildPlan(profile: TrainingProfile, catalog: Exercise[]): Plan {
     // con accesorios hasta gastar el tiempo que el usuario dijo tener.
     const fillers = FILLERS[focus];
     let misses = 0;
-    for (let i = 0; items.length < MAX_ITEMS && misses < fillers.length; i += 1) {
+    for (
+      let i = 0;
+      items.length < (profile.experience === 'beginner' ? 5 : MAX_ITEMS) && misses < fillers.length;
+      i += 1
+    ) {
       const result = add(fillers[i % fillers.length], 'accessory');
       if (result === false) break;
       misses = result === 'empty' ? misses + 1 : 0;
@@ -416,11 +429,7 @@ export function buildPlan(profile: TrainingProfile, catalog: Exercise[]): Plan {
   return { days, warnings: warningsFor(profile, available, days) };
 }
 
-function warningsFor(
-  profile: TrainingProfile,
-  available: Exercise[],
-  days: PlanDay[],
-): string[] {
+function warningsFor(profile: TrainingProfile, available: Exercise[], days: PlanDay[]): string[] {
   const warnings: string[] = [];
   const has = (pattern: Pattern) =>
     available.some((e) => metaFor(e).pattern === pattern && e.kind !== 'cardio');

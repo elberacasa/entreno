@@ -32,14 +32,18 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
+    "@types/node": "^22.20.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "prettier": "^3.9.6",
     "sharp": "^0.35.4",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11"
   },
   "scripts": {
     "start": "expo start",
@@ -50,7 +54,10 @@
     "build:web": "expo export --platform web --output-dir dist && node scripts/finish-web-build.mjs",
     "icons": "node scripts/make-icons.mjs",
     "exercise-images": "node scripts/fetch-exercise-images.mjs",
-    "serve:web": "node scripts/serve-dist.mjs"
+    "serve:web": "node scripts/serve-dist.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "check": "npm run typecheck && npm run lint && npm test"
   },
   "private": true
 }

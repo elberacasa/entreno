@@ -25,7 +25,8 @@ export type Equipment =
   | 'pullupBar'
   | 'machines'
   | 'cardioMachine'
-  | 'outdoors';
+  | 'outdoors'
+  | 'abWheel';
 
 export const EQUIPMENT_LABEL: Record<Equipment, string> = {
   dumbbells: 'Mancuernas',
@@ -35,6 +36,7 @@ export const EQUIPMENT_LABEL: Record<Equipment, string> = {
   machines: 'Máquinas y poleas',
   cardioMachine: 'Máquinas de cardio',
   outdoors: 'Calle o pista',
+  abWheel: 'Rueda abdominal',
 };
 
 export const EQUIPMENT_HINT: Record<Equipment, string> = {
@@ -45,6 +47,7 @@ export const EQUIPMENT_HINT: Record<Equipment, string> = {
   machines: 'Gimnasio con poleas y máquinas',
   cardioMachine: 'Cinta, bici estática, elíptica o remo',
   outdoors: 'Sitio para correr o montar en bici',
+  abWheel: 'Rueda para ejercicios abdominales',
 };
 
 export const EQUIPMENT_ORDER: Equipment[] = [
@@ -55,6 +58,7 @@ export const EQUIPMENT_ORDER: Equipment[] = [
   'machines',
   'cardioMachine',
   'outdoors',
+  'abWheel',
 ];
 
 /** Qué busca el usuario. Cambia series, repeticiones, descansos y cardio. */
@@ -78,6 +82,7 @@ export const GOAL_ORDER: Goal[] = ['muscle', 'fat', 'strength', 'performance'];
 
 /** Respuestas del cuestionario: con qué cuentas y qué quieres conseguir. */
 export interface TrainingProfile {
+  experience?: 'beginner' | 'regular';
   equipment: Equipment[];
   daysPerWeek: number;
   minutesPerSession: number;
@@ -172,6 +177,7 @@ export interface Session {
 }
 
 export interface Settings {
+  lastBackupAt?: string;
   unit: 'kg' | 'lb';
   defaultRestSec: number;
   bodyweightKg?: number | null;

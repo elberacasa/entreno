@@ -34,7 +34,14 @@ type SeedRow = [
 const ROWS: SeedRow[] = [
   // Pecho
   ['Press banca', 'Pecho', 'strength', ['barbell', 'bench'], 'push', 'compound'],
-  ['Press inclinado con mancuernas', 'Pecho', 'strength', ['dumbbells', 'bench'], 'push', 'compound'],
+  [
+    'Press inclinado con mancuernas',
+    'Pecho',
+    'strength',
+    ['dumbbells', 'bench'],
+    'push',
+    'compound',
+  ],
   ['Press banca con mancuernas', 'Pecho', 'strength', ['dumbbells', 'bench'], 'push', 'compound'],
   ['Aperturas en polea', 'Pecho', 'strength', ['machines'], 'push', 'accessory'],
   ['Fondos en paralelas', 'Pecho', 'strength', ['pullupBar'], 'push', 'compound'],
@@ -77,7 +84,7 @@ const ROWS: SeedRow[] = [
   // Core
   ['Crunch', 'Core', 'strength', [], 'core', 'accessory'],
   ['Elevación de piernas colgado', 'Core', 'strength', ['pullupBar'], 'core', 'accessory'],
-  ['Rueda abdominal', 'Core', 'strength', [], 'core', 'accessory'],
+  ['Rueda abdominal', 'Core', 'strength', ['abWheel'], 'core', 'accessory'],
   ['Plancha', 'Core', 'time', [], 'core', 'accessory'],
   ['Plancha lateral', 'Core', 'time', [], 'core', 'accessory'],
   ['Hollow hold', 'Core', 'time', [], 'core', 'accessory'],
