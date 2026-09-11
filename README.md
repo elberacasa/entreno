@@ -1,4 +1,4 @@
-# Entreno
+# AbenzaGym
 
 App para **planificar entrenamientos y llevar el seguimiento del rendimiento**.
 
@@ -10,15 +10,30 @@ mismo código puede compilarse también como app nativa si algún día hace falt
 Todo se guarda **en el propio teléfono** (no hay cuenta ni servidor). Hay
 exportación e importación de copias de seguridad en Ajustes.
 
-## Experiencia renovada
+## AbenzaGym: nueva experiencia
 
-- **Hoy** prioriza el siguiente entrenamiento, muestra la actividad de la semana y ofrece un acceso directo al plan para quien empieza.
-- **Plan por experiencia**: el cuestionario incluye experiencia; la opción inicial de hasta tres días usa cuerpo completo. El material se comprueba también para la rueda abdominal.
-- **Menos escritura**: cada ejercicio trae los valores de su última sesión completada. El esfuerzo es opcional, los campos tienen etiquetas accesibles y los valores incorrectos se explican antes de completar la serie.
-- **Resumen al terminar**: tiempo, series y récords comparables. Solo se anuncia que el entreno está guardado después de confirmar la escritura.
-- **Borradores de rutinas**: los cambios se conservan en este navegador aunque se recargue la pantalla. Guardar valida los objetivos y avisa si falla.
-- **Persistencia v2**: un único snapshot versionado guarda el conjunto de datos. Las escrituras se ordenan y restaurar una copia es una sola operación; si falla, los datos anteriores siguen intactos. Se leen las claves antiguas y se conservan durante la migración.
-- **Offline**: la instalación descarga el shell y sus recursos antes de activar el service worker. Las versiones del HTML y sus recursos se actualizan juntas.
+- **Identidad propia**: logo SVG original con grupos preparados para animación,
+  iconos PWA generados y tipografías locales con sus licencias.
+- **Entrenar**: próxima rutina, agenda semanal y una acción principal clara.
+  En escritorio el progreso y las últimas sesiones se muestran a su lado.
+- **Tu plan**: rutinas primero; edición, duplicado y compartir en un menú.
+  Importa archivos de rutina con revisión previa, sin reemplazar el historial.
+- **Modo de enfoque**: un ejercicio a la vez o toda la sesión. Consulta la
+  última referencia, cambia de ejercicio y conserva cada serie registrada.
+  Los ejercicios sin carga muestran repeticiones; el lastre es opcional.
+- **Calculadora de discos**: total con barra, tamaños disponibles y cantidades
+  por lado. Busca la combinación exacta o una inferior, nunca aumenta la carga.
+- **Calendario e historial**: selecciona un día, cambia de mes y busca sesiones.
+- **Distribución del trabajo**: series por grupo principal en 7 o 28 días,
+  además de las gráficas y récords por ejercicio. No estima recuperación.
+- **Apariencia**: clara, oscura o automática, guardada en los ajustes.
+- **Persistencia**: backups validados, guardado atómico, borradores recuperables
+  y protección contra escrituras de pestañas desactualizadas.
+- **Offline**: app, tipografías, iconos y recursos disponibles tras la primera
+  carga completa. La sesión abierta y el descanso sobreviven a una recarga.
+
+El formato para compartir rutinas es independiente del backup completo. Solo
+incluye la rutina y sus ejercicios, nunca sesiones, peso corporal ni perfil.
 
 ## Qué hace
 
@@ -43,7 +58,7 @@ exportación e importación de copias de seguridad en Ajustes.
 - **Demostración de cada ejercicio**: dos fotos, la posición inicial y la final,
   que se alternan para que veas el movimiento. Se abre tocando el nombre del
   ejercicio, tanto en la rutina como en mitad del entreno.
-- **Agenda**: programa una rutina para un día y una hora. Aparece en «Hoy» y
+- **Agenda**: programa una rutina para un día y una hora. Aparece en «Entrenar» y
   desde ahí se empieza de un toque. No hay notificaciones: una web instalada en
   el iPhone no puede mandarlas sin un servidor de push detrás.
 - **Temporizador de descanso** que arranca solo al marcar una serie.
@@ -186,9 +201,9 @@ existe la exportación de copias en Ajustes.
 
 ### Comprobaciones de esta versión
 
-27 pruebas cubren validación de backups, migración, guardado interrumpido, orden de escrituras, conflictos entre pestañas, recuperación, unidades, récords, restricciones de material e instalación offline. Los pull requests y los despliegues ejecutan las comprobaciones y la build de producción.
+39 pruebas cubren validación de backups, migración, guardado interrumpido, orden de escrituras, conflictos entre pestañas, recuperación, unidades, récords, restricciones de material e instalación offline. Los pull requests y los despliegues ejecutan las comprobaciones y la build de producción.
 
-La revisión manual local verificó el flujo completo hasta el resumen, la conservación del historial anterior, recuperación de borradores, conversión kg/lb y recarga de una ruta del catálogo con el servidor de pruebas apagado. Se revisaron vistas de 390 × 844 y escritorio. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
+La revisión manual local verificó el cuestionario completo, registro y resumen, navegación por ejercicio, importación aditiva y rechazo de archivos inválidos, calendario, calculadora de discos y apariencia clara/oscura. Se revisaron vistas de 390 × 844 y 1280 × 900. Con el servidor de pruebas apagado se recargó una sesión abierta: conservó la serie registrada, las tipografías y el descanso. Falta la prueba en un iPhone físico para confirmar teclado, compartir y comportamiento al bloquear la pantalla. La app sigue siendo local y no incorpora cuentas ni sincronización en la nube.
 
 Las claves originales `wk.*.v1` se conservan como respaldo de migración; `wk.data.v2` es la fuente actual después del primer guardado. No vuelvas a una versión antigua para continuar registrando datos: esa versión no conoce el snapshot nuevo. Los borradores `wk.draft.*` son independientes del backup de rutinas guardadas.
 
