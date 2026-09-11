@@ -6,13 +6,24 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DialogProvider } from '@/components/dialog';
 import { AppThemeProvider } from '@/components/theme-provider';
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/use-theme';
 import { StoreProvider } from '@/lib/store';
 
 export default function RootLayout() {
-  const scheme = useColorScheme();
-  const dark = scheme === 'dark';
-  const c = dark ? Colors.dark : Colors.light;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <StoreProvider>
+        <AppThemeProvider>
+          <Navigation />
+        </AppThemeProvider>
+      </StoreProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function Navigation() {
+  const c = useTheme();
+  const dark = c.bg === Colors.dark.bg;
 
   const base = dark ? DarkTheme : DefaultTheme;
   const navTheme = {
@@ -28,38 +39,34 @@ export default function RootLayout() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppThemeProvider>
-        <StoreProvider>
-          <ThemeProvider value={navTheme}>
-            <DialogProvider>
-              <StatusBar style={dark ? 'light' : 'dark'} />
-              <Stack
-                screenOptions={{
-                  headerTitleStyle: { fontWeight: '800', fontSize: 17 },
-                  headerStyle: { backgroundColor: c.bg },
-                  headerTintColor: c.accent,
-                  headerShadowVisible: false,
-                  contentStyle: { backgroundColor: c.bg },
-                }}>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="session/[id]"
-                  options={{ title: 'Entrenamiento', headerBackTitle: 'Atrás' }}
-                />
-                <Stack.Screen
-                  name="routine/[id]"
-                  options={{ title: 'Rutina', headerBackTitle: 'Atrás' }}
-                />
-                <Stack.Screen name="recommended" options={{ title: 'Plan recomendado' }} />
-                <Stack.Screen name="routine-catalog" options={{ title: 'Catálogo de rutinas' }} />
-                <Stack.Screen name="exercises" options={{ title: 'Ejercicios' }} />
-                <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
-              </Stack>
-            </DialogProvider>
-          </ThemeProvider>
-        </StoreProvider>
-      </AppThemeProvider>
-    </GestureHandlerRootView>
+    <ThemeProvider value={navTheme}>
+      <DialogProvider>
+        <StatusBar style={dark ? 'light' : 'dark'} />
+        <Stack
+          screenOptions={{
+            headerTitleStyle: { fontWeight: '800', fontSize: 17 },
+            headerStyle: { backgroundColor: c.bg },
+            headerTintColor: c.accent,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: c.bg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="session/[id]"
+            options={{ title: 'Entrenamiento', headerBackTitle: 'Atrás' }}
+          />
+          <Stack.Screen
+            name="routine/[id]"
+            options={{ title: 'Rutina', headerBackTitle: 'Atrás' }}
+          />
+          <Stack.Screen name="recommended" options={{ title: 'Plan recomendado' }} />
+          <Stack.Screen name="routine-catalog" options={{ title: 'Catálogo de rutinas' }} />
+          <Stack.Screen name="exercises" options={{ title: 'Ejercicios' }} />
+          <Stack.Screen name="tools" options={{ title: 'Discos para tu barra' }} />
+          <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
+        </Stack>
+      </DialogProvider>
+    </ThemeProvider>
   );
 }

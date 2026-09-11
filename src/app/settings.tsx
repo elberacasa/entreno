@@ -286,6 +286,27 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
           </>
         ) : null}
 
+        <Card tone="accent" style={{ padding: 22, gap: 10 }}>
+          <Text variant="title">AbenzaGym, siempre a mano.</Text>
+          <Text dim>
+            En iPhone: abre esta dirección en Safari, toca Compartir y «Añadir a pantalla de
+            inicio». En Android, abre el menú del navegador y elige instalar.
+          </Text>
+          <Text variant="caption" dim>
+            Tras la primera carga completa, puedes entrenar sin conexión. Usa siempre la misma
+            dirección para conservar tus datos.
+          </Text>
+        </Card>
+        <SectionHeader title="Apariencia" />
+        <Segmented
+          value={settings.theme ?? 'system'}
+          onChange={(theme) => store.updateSettings({ theme })}
+          options={[
+            { value: 'system', label: 'Automática' },
+            { value: 'light', label: 'Clara' },
+            { value: 'dark', label: 'Oscura' },
+          ]}
+        />
         <SectionHeader title="Tus datos" />
         <Card>
           <Row style={{ alignItems: 'flex-start' }} gap={Spacing.four}>

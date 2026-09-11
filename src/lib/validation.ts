@@ -78,6 +78,7 @@ export const sessionSchema = z.object({
     .refine(unique),
 });
 export const settingsSchema = z.object({
+  theme: z.enum(['system', 'light', 'dark']).optional(),
   unit: z.enum(['kg', 'lb']),
   defaultRestSec: number,
   bodyweightKg: optionalNumber,

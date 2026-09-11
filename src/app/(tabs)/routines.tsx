@@ -1,290 +1,401 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-
 import { useDialog } from '@/components/dialog';
-import { ProfileWizard } from '@/components/profile-wizard';
 import { SchedulePicker } from '@/components/schedule-picker';
 import {
   Button,
   Card,
-  EmptyState,
+  Field,
   IconButton,
   Row,
   Screen,
   ScreenTitle,
   SectionHeader,
+  Sheet,
   Text,
 } from '@/components/ui';
-import { Radius, Spacing } from '@/constants/theme';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
-import { exercisesLabel, formatWhen, plural, setsLabel } from '@/lib/format';
+import { pickBackup, saveBackup } from '@/lib/backup-file';
+import { exercisesLabel, setsLabel, formatWhen } from '@/lib/format';
+import { exportRoutine, parseRoutine } from '@/lib/routine-transfer';
 import { useStore } from '@/lib/store';
-import { GOAL_LABEL, describeEquipment, type Routine } from '@/lib/types';
+import type { Routine } from '@/lib/types';
 
 export default function RoutinesScreen() {
   const c = useTheme();
-  const bottomPadding = useTabBarPadding();
-  const { confirm, notify } = useDialog();
+  const paddingBottom = useTabBarPadding();
   const store = useStore();
-  const { routines, exerciseById, deleteRoutine, duplicateRoutine, startSession, activeSession } =
-    store;
+  const { confirm, notify } = useDialog();
   const [scheduling, setScheduling] = useState<Routine | null>(null);
-
-  const confirmDelete = async (r: Routine) => {
-    const ok = await confirm({
-      title: `Borrar «${r.name}»`,
-      message: 'La rutina desaparece. Los entrenos que ya hiciste con ella se conservan.',
-      confirmText: 'Borrar rutina',
-      destructive: true,
-    });
-    if (ok) deleteRoutine(r.id);
-  };
-
-  const start = async (r: Routine) => {
-    if (activeSession) {
-      const ok = await confirm({
-        title: 'Ya hay un entreno abierto',
-        message: `Tienes «${activeSession.name}» sin terminar. Ábrelo y ciérralo antes de empezar otro.`,
-        confirmText: 'Abrir el actual',
-      });
-      if (ok) router.push(`/session/${activeSession.id}`);
-      return;
+  const [menu, setMenu] = useState<Routine | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [shareText, setShareText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const parsed = useMemo(() => {
+    try {
+      return importText ? parseRoutine(importText) : null;
+    } catch {
+      return null;
     }
-    const session = startSession({ routineId: r.id });
+  }, [importText]);
+  const start = (routine: Routine) => {
+    if (store.activeSession) return router.push(`/session/${store.activeSession.id}`);
+    const session = store.startSession({ routineId: routine.id });
     router.push(`/session/${session.id}`);
   };
-
+  const share = async (routine: Routine) => {
+    setMenu(null);
+    try {
+      const text = exportRoutine(routine, store.exercises);
+      setShareText(text);
+      const result = await saveBackup(text, `abenzagym-rutina-${routine.id}.json`);
+      if (result === 'shared' || result === 'downloaded') setShareText('');
+      if (result === 'cancelled') setShareText('');
+    } catch {
+      await notify({
+        title: 'No se pudo compartir',
+        message:
+          'Si aparece el texto de la rutina, puedes copiarlo y enviarlo. Si falta un ejercicio, edita la rutina antes de volver a intentarlo.',
+      });
+    }
+  };
+  const loadFile = async () => {
+    try {
+      const text = await pickBackup();
+      if (text) setImportText(text);
+    } catch {
+      await notify({
+        title: 'No se pudo abrir el archivo',
+        message: 'Puedes pegar el contenido del archivo en el campo de texto.',
+      });
+    }
+  };
+  const importPlan = async () => {
+    if (!parsed || busy) return;
+    setBusy(true);
+    const failed = await store.importRoutine(parsed);
+    setBusy(false);
+    if (failed)
+      return notify({
+        title: 'No se pudo guardar',
+        message:
+          'La rutina original y tu historial siguen intactos. Conserva este archivo e inténtalo de nuevo.',
+      });
+    setImporting(false);
+    setImportText('');
+    await notify({
+      title: 'Rutina añadida',
+      message: `«${parsed.routine.name}» ya está en tu plan. Tus otras rutinas e historial se conservan.`,
+    });
+  };
+  if (!store.ready) return <Screen />;
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={{
-          padding: Spacing.four,
-          gap: Spacing.three,
-          paddingBottom: bottomPadding,
-        }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom, gap: 24 }}
       >
         <ScreenTitle
-          title="Rutinas"
+          title="Tu plan"
           right={
             <IconButton
               name="add"
-              size={22}
-              color={c.onAccent}
+              accessibilityLabel="Crear rutina"
+              surface
               onPress={() => router.push('/routine/new')}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor: c.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
             />
           }
         />
-
-        <PlanCard />
-
-        {/* Antes que el de ejercicios: una rutina hecha resuelve más que un
-            ejercicio suelto. */}
-        <Button
-          title="Catálogo de rutinas"
-          icon="albums-outline"
-          variant="secondary"
-          onPress={() => router.push('/routine-catalog')}
-        />
-
-        <Button
-          title="Catálogo de ejercicios"
-          icon="library-outline"
-          variant="secondary"
-          onPress={() => router.push('/exercises')}
-        />
-
-        {routines.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon="clipboard-outline"
-              title="Sin rutinas todavía"
-              hint="Una rutina es tu plan: los ejercicios, cuántas series y con qué peso o distancia quieres hacerlos. Si prefieres una ya hecha, cópiala del catálogo de rutinas."
-              action="Crear mi primera rutina"
-              onAction={() => router.push('/routine/new')}
-            />
-          </Card>
-        ) : (
-          <>
-            <SectionHeader title={plural(routines.length, 'rutina', 'rutinas')} />
-            {routines.map((r) => {
-              const names = r.items
-                .map((i) => exerciseById(i.exerciseId)?.name)
-                .filter(Boolean)
-                .slice(0, 4)
-                .join(' · ');
-              const sets = r.items.reduce((acc, i) => acc + (i.sets || 0), 0);
-
-              return (
-                <Card key={r.id} style={{ gap: Spacing.three, padding: Spacing.three }}>
-                  <Pressable
-                    onPress={() => router.push(`/routine/${r.id}`)}
-                    style={({ pressed }) => ({ gap: Spacing.two, opacity: pressed ? 0.6 : 1 })}
+        <Text dim>Prepara una vez. Llega y entrena.</Text>
+        <Row gap={10}>
+          <Button
+            title="Nueva rutina"
+            icon="add"
+            style={{ flex: 1 }}
+            onPress={() => router.push('/routine/new')}
+          />
+          <Button
+            title="Importar"
+            icon="download-outline"
+            variant="secondary"
+            style={{ flex: 1 }}
+            onPress={() => setImporting(true)}
+          />
+        </Row>
+        <View style={{ gap: 14 }}>
+          <SectionHeader
+            title={`Mis rutinas${store.routines.length ? ` (${store.routines.length})` : ''}`}
+          />
+          {store.routines.length ? (
+            store.routines.map((routine, index) => (
+              <Card key={routine.id} style={{ padding: 20, gap: 18 }}>
+                <Row style={{ alignItems: 'flex-start' }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 44,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: c.accentSoft,
+                    }}
                   >
-                    <Row>
-                      <View style={{ flex: 1, gap: Spacing.half }}>
-                        <Text variant="title" numberOfLines={1}>
-                          {r.name}
-                        </Text>
-                        <Text variant="caption" faint>
-                          {exercisesLabel(r.items.length)} · {setsLabel(sets)}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color={c.textFaint} />
-                    </Row>
-                    {names ? (
-                      <Text variant="body" dim numberOfLines={2} style={{ lineHeight: 20 }}>
-                        {names}
-                        {r.items.length > 4 ? ' …' : ''}
-                      </Text>
-                    ) : null}
+                    <Text variant="title" accent>
+                      {String(index + 1).padStart(2, '0')}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar ${routine.name}`}
+                    onPress={() => router.push(`/routine/${routine.id}`)}
+                    style={{ flex: 1, gap: 5 }}
+                  >
+                    <Text variant="title">{routine.name}</Text>
+                    <Text variant="caption" dim>
+                      {exercisesLabel(routine.items.length)} ·{' '}
+                      {setsLabel(routine.items.reduce((sum, item) => sum + item.sets, 0))}
+                    </Text>
                   </Pressable>
-
-                  {/* Empezar manda; duplicar y borrar quedan como iconos para que
-                      no se pulse «Borrar» queriendo entrenar. */}
-                  <Row gap={Spacing.two}>
-                    <Button
-                      title="Empezar"
-                      icon="play"
-                      style={{ flex: 1 }}
-                      onPress={() => start(r)}
-                    />
-                    <IconButton
-                      name="calendar-outline"
-                      size={19}
-                      surface
-                      onPress={() => setScheduling(r)}
-                    />
-                    <IconButton
-                      name="copy-outline"
-                      size={19}
-                      surface
-                      onPress={() => duplicateRoutine(r.id)}
-                    />
-                    <IconButton
-                      name="trash-outline"
-                      size={19}
-                      surface
-                      onPress={() => confirmDelete(r)}
-                    />
-                  </Row>
-                </Card>
-              );
-            })}
-          </>
-        )}
+                  <IconButton
+                    name="ellipsis-horizontal"
+                    accessibilityLabel={`Opciones de ${routine.name}`}
+                    onPress={() => setMenu(routine)}
+                  />
+                </Row>
+                <Text dim numberOfLines={2}>
+                  {routine.items
+                    .map((item) => store.exerciseById(item.exerciseId)?.name)
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+                <Row>
+                  <Button
+                    title={store.activeSession ? 'Volver a la sesión' : 'Entrenar'}
+                    icon="play"
+                    style={{ flex: 1 }}
+                    onPress={() => start(routine)}
+                  />
+                  <Button
+                    title="Programar"
+                    variant="secondary"
+                    icon="calendar-outline"
+                    style={{ flex: 1 }}
+                    onPress={() => setScheduling(routine)}
+                  />
+                </Row>
+              </Card>
+            ))
+          ) : (
+            <Card style={{ padding: 24, gap: 12, borderStyle: 'dashed' }}>
+              <Text variant="title">Dale forma a tu semana.</Text>
+              <Text dim>
+                Crea tu rutina, importa la de un amigo o elige un punto de partida de la biblioteca.
+              </Text>
+              <Button
+                title="Buscar mi primer plan"
+                variant="secondary"
+                onPress={() => router.push('/recommended')}
+              />
+            </Card>
+          )}
+        </View>
+        {store.upcoming().length ? (
+          <View style={{ gap: 12 }}>
+            <SectionHeader title="En tu agenda" />
+            {store.upcoming().map((item) => (
+              <Row
+                key={item.id}
+                style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: c.border }}
+              >
+                <Ionicons name="calendar-outline" size={21} color={c.accent} />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text variant="heading">
+                    {store.routineById(item.routineId)?.name ?? 'Rutina'}
+                  </Text>
+                  <Text variant="caption" dim>
+                    {formatWhen(item.at)}
+                  </Text>
+                </View>
+                <IconButton
+                  name="close"
+                  accessibilityLabel="Quitar de la agenda"
+                  onPress={() => store.unschedule(item.id)}
+                />
+              </Row>
+            ))}
+          </View>
+        ) : null}
+        <View style={{ gap: 12 }}>
+          <SectionHeader title="Encuentra tu punto de partida" />
+          <Discovery
+            title="Plan a tu medida"
+            detail="Según tu experiencia, material y días"
+            icon="compass-outline"
+            onPress={() => router.push('/recommended')}
+          />
+          <Discovery
+            title="Biblioteca de rutinas"
+            detail="Programas listos para adaptar"
+            icon="albums-outline"
+            onPress={() => router.push('/routine-catalog')}
+          />
+          <Discovery
+            title="Explorar ejercicios"
+            detail="Técnica, material y grupos musculares"
+            icon="body-outline"
+            onPress={() => router.push('/exercises')}
+          />
+        </View>
       </ScrollView>
-
+      <Sheet visible={!!menu} title={menu?.name ?? 'Rutina'} onClose={() => setMenu(null)}>
+        <Button
+          title="Editar rutina"
+          variant="secondary"
+          icon="create-outline"
+          onPress={() => {
+            if (menu) router.push(`/routine/${menu.id}`);
+            setMenu(null);
+          }}
+        />
+        <Button
+          title="Compartir rutina"
+          variant="secondary"
+          icon="share-outline"
+          onPress={() => menu && share(menu)}
+        />
+        <Text variant="caption" dim>
+          Comparte solo el plan y sus ejercicios. Tu historial, peso corporal y ajustes no se
+          incluyen.
+        </Text>
+        <Button
+          title="Duplicar rutina"
+          variant="secondary"
+          icon="copy-outline"
+          onPress={() => {
+            if (menu) store.duplicateRoutine(menu.id);
+            setMenu(null);
+          }}
+        />
+        <Button
+          title="Eliminar rutina"
+          variant="danger"
+          icon="trash-outline"
+          onPress={async () => {
+            const routine = menu;
+            setMenu(null);
+            if (
+              routine &&
+              (await confirm({
+                title: 'Eliminar rutina',
+                message: `Se elimina «${routine.name}». Tu historial se conserva.`,
+                destructive: true,
+                confirmText: 'Eliminar',
+              }))
+            )
+              store.deleteRoutine(routine.id);
+          }}
+        />
+      </Sheet>
+      <Sheet
+        visible={importing}
+        title="Importar una rutina"
+        onClose={() => !busy && setImporting(false)}
+        footer={
+          <Button
+            title="Añadir a mis rutinas"
+            loading={busy}
+            disabled={!parsed}
+            onPress={importPlan}
+          />
+        }
+      >
+        <Text dim>
+          Abre un archivo de rutina de AbenzaGym. Se añade a tu plan sin reemplazar nada.
+        </Text>
+        <Button
+          title="Elegir archivo de rutina"
+          icon="document-outline"
+          variant="secondary"
+          onPress={loadFile}
+        />
+        <Field
+          label="O pega el contenido del archivo"
+          multiline
+          value={importText}
+          onChangeText={setImportText}
+          style={{ minHeight: 140 }}
+          placeholder="Contenido JSON de una rutina"
+        />
+        {parsed ? (
+          <Card tone="accent" style={{ gap: 8 }}>
+            <Text variant="title">{parsed.routine.name}</Text>
+            <Text>
+              {exercisesLabel(parsed.routine.items.length)}. Se añadirá como una nueva rutina.
+            </Text>
+          </Card>
+        ) : importText ? (
+          <Text danger>
+            No es un archivo de rutina válido. Las copias completas se restauran desde Ajustes.
+          </Text>
+        ) : null}
+      </Sheet>
+      <Sheet visible={!!shareText} title="Comparte tu rutina" onClose={() => setShareText('')}>
+        <Text dim>
+          Si no se pudo guardar el archivo, copia este texto. Tu amigo puede pegarlo en Plan →
+          Importar.
+        </Text>
+        <Field
+          label="Contenido de la rutina"
+          multiline
+          value={shareText}
+          editable={false}
+          selectTextOnFocus
+          style={{ minHeight: 220 }}
+        />
+      </Sheet>
       <SchedulePicker
         routine={scheduling}
         onClose={() => setScheduling(null)}
-        onConfirm={async (at) => {
-          if (!scheduling) return;
-          store.scheduleRoutine(scheduling.id, at);
+        onConfirm={(at) => {
+          if (scheduling) store.scheduleRoutine(scheduling.id, at);
           setScheduling(null);
-          await notify({
-            title: 'Programado',
-            message: `«${scheduling.name}» queda para ${formatWhen(at.toISOString()).toLowerCase()}. Lo verás en Hoy cuando se acerque.`,
-          });
         }}
       />
     </Screen>
   );
 }
-
-/**
- * Puerta de entrada al cuestionario. Mientras no esté contestado invita a
- * hacerlo; después resume las respuestas y lleva al plan.
- */
-function PlanCard() {
+function Discovery({
+  title,
+  detail,
+  icon,
+  onPress,
+}: {
+  title: string;
+  detail: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
   const c = useTheme();
-  const store = useStore();
-  const [wizard, setWizard] = useState({ open: false, seq: 0 });
-  const profile = store.settings.profile ?? null;
-  const open = () => router.push('/recommended');
-
-  if (!profile) {
-    return (
-      <>
-        <Card tone="accent" style={{ gap: Spacing.three, borderColor: c.accent }}>
-          <Row gap={Spacing.three} style={{ alignItems: 'flex-start' }}>
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: Radius.sm,
-                backgroundColor: c.surface,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="sparkles" size={19} color={c.accent} />
-            </View>
-            <View style={{ flex: 1, gap: Spacing.half }}>
-              <Text variant="heading">¿No sabes por dónde empezar?</Text>
-              <Text variant="caption" dim style={{ lineHeight: 18 }}>
-                Cinco preguntas sobre tu material, tu tiempo y tu objetivo, y te preparo las
-                rutinas.
-              </Text>
-            </View>
-          </Row>
-          <Button
-            title="Hacer el cuestionario"
-            icon="sparkles"
-            onPress={() => setWizard((w) => ({ open: true, seq: w.seq + 1 }))}
-          />
-        </Card>
-
-        <ProfileWizard
-          key={wizard.seq}
-          visible={wizard.open}
-          onClose={() => setWizard((w) => ({ ...w, open: false }))}
-          onDone={(next) => {
-            store.updateSettings({ profile: next });
-            setWizard((w) => ({ ...w, open: false }));
-            open();
-          }}
-        />
-      </>
-    );
-  }
-
   return (
-    <Pressable onPress={open}>
-      <Card style={{ gap: Spacing.three }}>
-        <Row>
-          <View style={{ flex: 1, gap: Spacing.half }}>
-            <Text variant="overline" faint>
-              Tu plan
-            </Text>
-            <Text variant="heading" numberOfLines={1}>
-              {GOAL_LABEL[profile.goal]} · {profile.daysPerWeek} días · {profile.minutesPerSession}{' '}
-              min
-            </Text>
-            <Text variant="caption" faint numberOfLines={1}>
-              {describeEquipment(profile.equipment)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={c.textFaint} />
-        </Row>
-        <Button
-          title="Ver rutinas recomendadas"
-          icon="sparkles"
-          variant="secondary"
-          onPress={open}
-        />
-      </Card>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{ paddingVertical: 14, borderBottomWidth: 1, borderColor: c.border }}
+    >
+      <Row>
+        <Ionicons name={icon} color={c.accent} size={24} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text variant="heading">{title}</Text>
+          <Text variant="caption" dim>
+            {detail}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" color={c.textDim} size={18} />
+      </Row>
     </Pressable>
   );
 }

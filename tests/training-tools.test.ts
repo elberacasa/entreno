@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { settingsSchema } from '@/lib/validation';
 import {
   activityByDay,
   groupWorkload,
@@ -136,4 +137,14 @@ describe('portable routines', () => {
     expect(() => parseRoutine(' '.repeat(1_000_001))).toThrow();
     expect(() => exportRoutine(routine, [])).toThrow();
   });
+});
+
+it('preserves a valid appearance preference while accepting older settings', () => {
+  expect(settingsSchema.parse({ unit: 'kg', defaultRestSec: 90, theme: 'dark' }).theme).toBe(
+    'dark',
+  );
+  expect(settingsSchema.parse({ unit: 'kg', defaultRestSec: 90 }).theme).toBeUndefined();
+  expect(
+    settingsSchema.safeParse({ unit: 'kg', defaultRestSec: 90, theme: 'invalid' }).success,
+  ).toBe(false);
 });

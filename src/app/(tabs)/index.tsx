@@ -1,80 +1,69 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 
-import {
-  Badge,
-  Button,
-  Card,
-  Divider,
-  IconButton,
-  ProgressBar,
-  Row,
-  Screen,
-  SectionHeader,
-  StatTile,
-  Text,
-} from '@/components/ui';
-import { Radius, Spacing } from '@/constants/theme';
+import { Brand, BrandMark } from '@/components/brand';
+import { Button, Card, IconButton, Row, Screen, SectionHeader, Text } from '@/components/ui';
 import { useNow } from '@/hooks/use-now';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  daysUntil,
   exercisesLabel,
+  setsLabel,
   formatDuration,
-  formatWhen,
   num,
   relativeDay,
   sessionProgress,
   sessionSummary,
-  setsLabel,
+  sessionDurationSec,
   toDisplayWeight,
 } from '@/lib/format';
-import { weeklyTotals, weekStreak } from '@/lib/stats';
+import { weeklyTotals } from '@/lib/stats';
+import { activityByDay, localDay } from '@/lib/training-insights';
 import { useStore } from '@/lib/store';
-import type { Routine } from '@/lib/types';
 
 export default function TodayScreen() {
   const c = useTheme();
-  const bottomPadding = useTabBarPadding();
-  const { ready, activeSession, sessions, routines, startSession, settings } = useStore();
-
-  // El reloj solo corre cuando hay un entreno abierto.
+  const store = useStore();
+  const { width } = useWindowDimensions();
+  const paddingBottom = useTabBarPadding();
   const now = useNow(true, 60_000);
-
-  const finished = useMemo(() => sessions.filter((s) => s.finishedAt), [sessions]);
+  const finished = useMemo(() => store.sessions.filter((s) => s.finishedAt), [store.sessions]);
   const week = useMemo(() => weeklyTotals(finished, 1)[0], [finished]);
-  const streak = useMemo(() => weekStreak(finished), [finished]);
-  const recent = finished.slice(0, 3);
-
-  const begin = (routineId?: string) => {
-    const session = startSession({ routineId: routineId ?? null });
+  const days = useMemo(() => activityByDay(finished), [finished]);
+  const today = new Date(now);
+  const todayKey = localDay(today);
+  const monday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() - ((today.getDay() + 6) % 7),
+  );
+  const due = store.upcoming().find((item) => localDay(new Date(item.at)) <= todayKey);
+  const lastRoutine = finished[0]?.routineId;
+  const nextIndex = store.routines.findIndex((r) => r.id === lastRoutine);
+  const routine =
+    (due ? store.routineById(due.routineId) : undefined) ??
+    store.routines[(nextIndex + 1) % store.routines.length];
+  const active = store.activeSession;
+  const progress = active ? sessionProgress(active) : null;
+  const goal = store.settings.profile?.daysPerWeek;
+  const start = (freestyle = false) => {
+    if (active) return router.push(`/session/${active.id}`);
+    const session = store.startSession({ routineId: freestyle ? null : routine?.id });
+    if (due && !freestyle && session.routineId === due.routineId) store.unschedule(due.id);
     router.push(`/session/${session.id}`);
   };
-
-  if (!ready) return <Screen />;
-
-  const today = new Date(now).toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  if (!store.ready) return <Screen />;
 
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: width >= 900 ? 32 : 20, paddingBottom, gap: 28 }}
       >
-        <Row style={{ justifyContent: 'space-between', paddingVertical: 8 }}>
-          <Row style={{ flex: 1 }} gap={8}>
-            <Ionicons name="barbell" size={26} color={c.accent} />
-            <Text variant="heading" style={{ fontSize: 22, letterSpacing: -0.8 }}>
-              entreno
-            </Text>
-          </Row>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Brand />
           <IconButton
             name="settings-outline"
             accessibilityLabel="Ajustes y copias de seguridad"
@@ -82,399 +71,326 @@ export default function TodayScreen() {
             onPress={() => router.push('/settings')}
           />
         </Row>
-        <View style={{ gap: 6, marginBottom: 8 }}>
-          <Text variant="caption" dim>
-            {today}
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <Text variant="display" style={{ fontSize: 50, lineHeight: 54 }}>
+            Entrenar
           </Text>
-          <Text variant="display" style={{ fontSize: 36, lineHeight: 40 }}>
-            {activeSession
-              ? 'Sigue donde lo dejaste.'
-              : finished.length
-                ? 'Haz espacio para ti.'
-                : 'Tu próximo paso empieza aquí.'}
+          <Text variant="caption" dim style={{ paddingBottom: 5 }}>
+            {today.toLocaleDateString('es', { day: 'numeric', month: 'long' })}
           </Text>
-        </View>
-        <WeekStrip sessions={finished} now={now} />
-
-        {activeSession ? (
-          <ActiveSessionCard session={activeSession} now={now} />
-        ) : (
-          <StartCard routines={routines} onStart={begin} />
-        )}
-
-        <Agenda />
-
-        {finished.length > 0 ? (
-          <View style={{ gap: 16, paddingVertical: 12 }}>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Text variant="heading">Tu semana</Text>
-              <Text variant="caption" dim>
-                {settings.profile
-                  ? `${week?.sessions ?? 0} de ${settings.profile.daysPerWeek} entrenos`
-                  : 'Cada sesión cuenta'}
-              </Text>
-            </Row>
-            {settings.profile ? (
-              <ProgressBar
-                value={(week?.sessions ?? 0) / settings.profile.daysPerWeek}
-                height={6}
-              />
-            ) : null}
-            <Row style={{ alignItems: 'flex-start' }}>
-              <StatTile label="Entrenos" value={String(week?.sessions ?? 0)} accent />
-              <StatTile label="Semanas seguidas" value={String(streak)} />
-              {(week?.volumeKg ?? 0) > 0 ? (
-                <StatTile
-                  label={`Volumen (${settings.unit})`}
-                  value={num(toDisplayWeight(week?.volumeKg ?? 0, settings.unit), 0)}
+        </Row>
+        <Row gap={6}>
+          {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((label, index) => {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + index);
+            const key = localDay(date);
+            const done = days.has(key);
+            const current = key === todayKey;
+            const planned = store.schedule.some((item) => localDay(new Date(item.at)) === key);
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={`${date.toLocaleDateString('es', { weekday: 'long', day: 'numeric' })}, ${done ? 'entrenamiento registrado' : planned ? 'rutina programada' : 'ver historial'}`}
+                onPress={() => router.push({ pathname: '/history', params: { date: key } })}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingVertical: 10,
+                  borderRadius: 16,
+                  backgroundColor: current ? c.surface2 : 'transparent',
+                  borderWidth: current ? 1 : 0,
+                  borderColor: c.borderStrong,
+                }}
+              >
+                <Text variant="caption" dim>
+                  {label}
+                </Text>
+                <Text variant="heading" style={{ fontSize: 17 }}>
+                  {date.getDate()}
+                </Text>
+                <View
+                  style={{
+                    height: 6,
+                    width: 6,
+                    borderRadius: 3,
+                    backgroundColor: done ? c.success : planned ? c.accent : 'transparent',
+                  }}
                 />
-              ) : (
-                <StatTile label="Distancia (km)" value={num(week?.distanceKm ?? 0, 1)} />
-              )}
-            </Row>
-          </View>
-        ) : null}
-
-        <SectionHeader
-          title="Últimos entrenos"
-          action={finished.length > 0 ? 'Ver todo' : undefined}
-          onAction={() => router.push('/history')}
-        />
-
-        {recent.length === 0 ? (
-          <View style={{ paddingVertical: 16, gap: 8 }}>
-            <Text variant="heading">El progreso empieza con una sesión.</Text>
-            <Text dim style={{ lineHeight: 22 }}>
-              Aquí verás lo que hiciste y cómo vas avanzando. Empieza con un plan o entrena a tu
-              manera.
-            </Text>
-          </View>
-        ) : (
-          <Card style={{ padding: 0, overflow: 'hidden' }}>
-            {recent.map((s, i) => (
-              <View key={s.id}>
-                {i > 0 ? <Divider /> : null}
-                <Pressable
-                  onPress={() => router.push(`/session/${s.id}`)}
-                  style={({ pressed }) => ({
-                    padding: Spacing.four,
-                    gap: Spacing.one,
-                    backgroundColor: pressed ? c.surface2 : 'transparent',
-                  })}
-                >
-                  <Row style={{ justifyContent: 'space-between' }}>
-                    <Text variant="heading" numberOfLines={1} style={{ flex: 1 }}>
-                      {s.name}
-                    </Text>
-                    <Text variant="caption" faint>
-                      {relativeDay(s.finishedAt!)}
-                    </Text>
-                  </Row>
-                  <Text variant="caption" dim numberOfLines={1}>
-                    {sessionSummary(s, settings.unit)}
-                  </Text>
-                </Pressable>
+              </Pressable>
+            );
+          })}
+        </Row>
+        <View
+          style={{ flexDirection: width >= 900 ? 'row' : 'column', gap: 28, alignItems: 'stretch' }}
+        >
+          <View style={{ flex: width >= 900 ? 1.25 : undefined, gap: 18 }}>
+            <View
+              style={{
+                backgroundColor: '#244CE8',
+                borderRadius: 26,
+                padding: 24,
+                gap: 22,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  right: -22,
+                  top: -4,
+                  opacity: 0.13,
+                  transform: [{ rotate: '-8deg' }],
+                }}
+              >
+                <BrandMark size={220} color="#FFFFFF" />
               </View>
-            ))}
-          </Card>
-        )}
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text variant="label" style={{ color: '#FFFFFF' }}>
+                  {active
+                    ? 'Sesión en curso'
+                    : due
+                      ? 'Programada para ti'
+                      : routine
+                        ? 'Tu próxima sesión'
+                        : 'Tu gimnasio. Tu plan.'}
+                </Text>
+                <Ionicons
+                  name={active ? 'radio-button-on' : 'barbell-outline'}
+                  size={23}
+                  color="#FFFFFF"
+                />
+              </Row>
+              <View style={{ gap: 8 }}>
+                <Text variant="display" style={{ color: '#FFFFFF', fontSize: 48, lineHeight: 50 }}>
+                  {active?.name ?? routine?.name ?? 'Empecemos\ncon un buen plan.'}
+                </Text>
+                <Text style={{ color: '#E0E8FF' }}>
+                  {active
+                    ? `${progress?.done} de ${progress?.total} series registradas`
+                    : routine
+                      ? `${exercisesLabel(routine.items.length)} · ${setsLabel(routine.items.reduce((sum, item) => sum + item.sets, 0))}`
+                      : 'Elige tus días, tu material y tu objetivo. Las rutinas quedan listas para entrenar.'}
+                </Text>
+              </View>
+              {routine && !active ? (
+                <View style={{ gap: 12, paddingVertical: 4 }}>
+                  {routine.items.slice(0, 3).map((item, index) => (
+                    <Row key={item.id} gap={12}>
+                      <Text variant="caption" style={{ color: '#D8E3FF', width: 18 }}>
+                        {index + 1}
+                      </Text>
+                      <Text style={{ flex: 1, color: '#FFFFFF' }} numberOfLines={1}>
+                        {store.exerciseById(item.exerciseId)?.name ?? 'Ejercicio'}
+                      </Text>
+                      <Text variant="caption" style={{ color: '#D8E3FF' }}>
+                        {item.sets} series
+                      </Text>
+                    </Row>
+                  ))}
+                  {routine.items.length > 3 ? (
+                    <Text variant="caption" style={{ color: '#D8E3FF' }}>
+                      Y {routine.items.length - 3} ejercicios más
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  active ? 'Continuar sesión' : routine ? 'Empezar sesión' : 'Preparar mi plan'
+                }
+                onPress={() => (active || routine ? start() : router.push('/recommended'))}
+                style={({ pressed }) => ({
+                  minHeight: 56,
+                  paddingHorizontal: 20,
+                  borderRadius: 14,
+                  backgroundColor: pressed ? '#DAE3FF' : '#FFFFFF',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                })}
+              >
+                <Text variant="heading" style={{ color: '#173CBA' }}>
+                  {active ? 'Continuar sesión' : routine ? 'Empezar sesión' : 'Preparar mi plan'}
+                </Text>
+                <Ionicons name="arrow-forward" size={22} color="#173CBA" />
+              </Pressable>
+            </View>
+            <Row gap={10}>
+              <Button
+                title={routine ? 'Cambiar rutina' : 'Explorar planes'}
+                variant="secondary"
+                style={{ flex: 1 }}
+                onPress={() => router.push(routine ? '/routines' : '/routine-catalog')}
+              />
+              <Button
+                title="Sesión libre"
+                variant="ghost"
+                style={{ flex: 1 }}
+                onPress={() => start(true)}
+              />
+            </Row>
+            <View style={{ gap: 2 }}>
+              <ToolRow
+                title="Calculadora de discos"
+                detail="Prepara la barra en segundos"
+                icon="options-outline"
+                onPress={() => router.push('/tools')}
+              />
+              <ToolRow
+                title="Biblioteca de ejercicios"
+                detail={`${store.exercises.length} movimientos y demostraciones`}
+                icon="body-outline"
+                onPress={() => router.push('/exercises')}
+              />
+            </View>
+          </View>
+          <View style={{ flex: width >= 900 ? 1 : undefined, gap: 22 }}>
+            <View style={{ gap: 14 }}>
+              <SectionHeader
+                title="Esta semana"
+                action="Ver progreso"
+                onAction={() => router.push('/progress')}
+              />
+              <Row style={{ alignItems: 'flex-end' }}>
+                <Text variant="metric" style={{ fontSize: 56, lineHeight: 60 }}>
+                  {week?.sessions ?? 0}
+                </Text>
+                <Text dim style={{ flex: 1, paddingBottom: 8 }}>
+                  {goal ? `de ${goal} sesiones previstas` : 'sesiones completadas'}
+                </Text>
+              </Row>
+              {goal ? (
+                <Row gap={6}>
+                  {Array.from({ length: goal }, (_, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        height: 8,
+                        flex: 1,
+                        borderRadius: 4,
+                        backgroundColor: i < (week?.sessions ?? 0) ? c.accent : c.surface3,
+                      }}
+                    />
+                  ))}
+                </Row>
+              ) : null}
+              <Row style={{ paddingTop: 4 }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text variant="title">
+                    {formatDuration(
+                      finished
+                        .filter(
+                          (s) =>
+                            new Date(s.finishedAt!) >= monday && new Date(s.finishedAt!) <= today,
+                        )
+                        .reduce((sum, s) => sum + (sessionDurationSec(s) ?? 0), 0),
+                    )}
+                  </Text>
+                  <Text variant="caption" dim>
+                    Tiempo registrado
+                  </Text>
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text variant="title">
+                    {num(toDisplayWeight(week?.volumeKg ?? 0, store.settings.unit), 0)}{' '}
+                    <Text variant="caption" dim>
+                      {store.settings.unit}
+                    </Text>
+                  </Text>
+                  <Text variant="caption" dim>
+                    Volumen de carga
+                  </Text>
+                </View>
+              </Row>
+            </View>
+            <View style={{ gap: 12 }}>
+              <SectionHeader
+                title="Últimas sesiones"
+                action={finished.length ? 'Ver todas' : undefined}
+                onAction={() => router.push('/history')}
+              />
+              {finished.length ? (
+                finished.slice(0, 3).map((session) => (
+                  <Pressable
+                    key={session.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver ${session.name}, ${relativeDay(session.finishedAt!)}`}
+                    onPress={() => router.push(`/summary/${session.id}`)}
+                    style={({ pressed }) => ({
+                      paddingVertical: 15,
+                      borderBottomWidth: 1,
+                      borderColor: c.border,
+                      opacity: pressed ? 0.65 : 1,
+                    })}
+                  >
+                    <Row>
+                      <View style={{ flex: 1, gap: 5 }}>
+                        <Text variant="heading">{session.name}</Text>
+                        <Text variant="caption" dim>
+                          {sessionSummary(session, store.settings.unit)}
+                        </Text>
+                      </View>
+                      <Text variant="caption" dim>
+                        {relativeDay(session.finishedAt!)}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={17} color={c.textDim} />
+                    </Row>
+                  </Pressable>
+                ))
+              ) : (
+                <Card style={{ gap: 8, borderStyle: 'dashed', padding: 22 }}>
+                  <Text variant="heading">Tu primera sesión va aquí.</Text>
+                  <Text dim>
+                    Después de entrenar verás tus series, tus marcas y el punto de partida para la
+                    próxima vez.
+                  </Text>
+                </Card>
+              )}
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </Screen>
   );
 }
 
-/** Tarjeta destacada del entreno abierto: cronómetro grande y avance de series. */
-function ActiveSessionCard({
-  session,
-  now,
+function ToolRow({
+  title,
+  detail,
+  icon,
+  onPress,
 }: {
-  session: NonNullable<ReturnType<typeof useStore>['activeSession']>;
-  now: number;
+  title: string;
+  detail: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
 }) {
   const c = useTheme();
-  const open = () => router.push(`/session/${session.id}`);
-  const { done, total } = sessionProgress(session);
-  const elapsed = (now - new Date(session.startedAt).getTime()) / 1000;
-
   return (
-    <Pressable onPress={open}>
-      <Card raised style={{ borderColor: c.accent, gap: Spacing.four }}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Row gap={Spacing.two}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
-            <Text variant="overline" accent>
-              En curso
-            </Text>
-          </Row>
-          <Text variant="metricSm" accent>
-            {formatDuration(elapsed)}
-          </Text>
-        </Row>
-
-        <View style={{ gap: Spacing.two }}>
-          <Text variant="title" numberOfLines={1}>
-            {session.name}
-          </Text>
-          <ProgressBar value={total > 0 ? done / total : 0} height={6} />
-          <Row style={{ justifyContent: 'space-between' }}>
-            <Text variant="caption" dim>
-              {done} de {total} series
-            </Text>
-            <Text variant="caption" dim>
-              {exercisesLabel(session.entries.length)}
-            </Text>
-          </Row>
-        </View>
-
-        <Button title="Continuar entrenamiento" icon="play" onPress={open} />
-      </Card>
-    </Pressable>
-  );
-}
-
-/** Punto de partida cuando no hay nada abierto: rutinas listas para lanzar. */
-function StartCard({
-  routines,
-  onStart,
-}: {
-  routines: Routine[];
-  onStart: (routineId?: string) => void;
-}) {
-  const c = useTheme();
-  const { exerciseById, sessions } = useStore();
-  const lastRoutine = sessions.find((session) => session.finishedAt)?.routineId;
-  const nextIndex = routines.findIndex((routine) => routine.id === lastRoutine);
-  const next = routines.length ? routines[(nextIndex + 1) % routines.length] : undefined;
-
-  if (!next)
-    return (
-      <Card style={{ padding: 24, gap: 20, borderRadius: 24, borderColor: c.borderStrong }}>
-        <View
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 16,
-            backgroundColor: c.accentSoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="compass-outline" size={28} color={c.accent} />
-        </View>
-        <View style={{ gap: 8 }}>
-          <Text variant="title" style={{ fontSize: 27 }}>
-            Un plan que encaje contigo.
-          </Text>
-          <Text dim style={{ lineHeight: 23 }}>
-            Tu experiencia, tu material y tu tiempo. Prepara tu semana sin empezar de cero.
-          </Text>
-        </View>
-        <Button
-          title="Encontrar mi plan"
-          icon="arrow-forward"
-          onPress={() => router.push('/recommended')}
-        />
-        <Button
-          title="Explorar rutinas"
-          variant="secondary"
-          onPress={() => router.push('/routine-catalog')}
-        />
-        <Button title="Entrenar a mi manera" variant="ghost" onPress={() => onStart()} />
-      </Card>
-    );
-
-  const sets = next.items.reduce((sum, item) => sum + item.sets, 0);
-  return (
-    <Card style={{ padding: 24, gap: 20, borderRadius: 24, borderColor: c.borderStrong }}>
-      <Row style={{ justifyContent: 'space-between' }}>
-        <Badge
-          label={routines.length > 1 ? 'Siguiente en tus rutinas' : 'Tu rutina lista'}
-          tone="accent"
-        />
-        <Ionicons name="barbell-outline" size={24} color={c.accent} />
-      </Row>
-      <View style={{ gap: 8 }}>
-        <Text variant="display">{next.name}</Text>
-        <Text dim>
-          {exercisesLabel(next.items.length)} · {setsLabel(sets)}
-        </Text>
-      </View>
-      <View style={{ gap: 10 }}>
-        {next.items.slice(0, 3).map((item) => (
-          <Row key={item.id} gap={10}>
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: c.textFaint }} />
-            <Text style={{ flex: 1 }}>{exerciseById(item.exerciseId)?.name ?? 'Ejercicio'}</Text>
-            <Text variant="caption" dim>
-              {setsLabel(item.sets)}
-            </Text>
-          </Row>
-        ))}
-        {next.items.length > 3 ? (
-          <Text variant="caption" dim>
-            Y {next.items.length - 3} ejercicios más
-          </Text>
-        ) : null}
-      </View>
-      <Button title="Empezar entrenamiento" icon="play" onPress={() => onStart(next.id)} />
-      <Row>
-        <Button
-          title="Elegir otra"
-          variant="secondary"
-          style={{ flex: 1 }}
-          onPress={() => router.push('/routines')}
-        />
-        <Button
-          title="Entreno libre"
-          variant="ghost"
-          style={{ flex: 1 }}
-          onPress={() => onStart()}
-        />
-      </Row>
-    </Card>
-  );
-}
-
-function WeekStrip({
-  sessions,
-  now,
-}: {
-  sessions: ReturnType<typeof useStore>['sessions'];
-  now: number;
-}) {
-  const c = useTheme();
-  const today = new Date(now);
-  const monday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() - ((today.getDay() + 6) % 7),
-  );
-  const key = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-  const trained = new Set(sessions.map((session) => key(new Date(session.finishedAt!))));
-  return (
-    <Row gap={6} style={{ paddingVertical: 8, marginBottom: 12 }}>
-      {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((label, index) => {
-        const date = new Date(monday);
-        date.setDate(monday.getDate() + index);
-        const done = trained.has(key(date));
-        const current = key(date) === key(today);
-        return (
-          <View
-            key={index}
-            accessibilityLabel={`${date.toLocaleDateString('es', { weekday: 'long' })}, ${done ? 'entrenamiento completado' : current ? 'hoy' : 'sin entreno'}`}
-            style={{ flex: 1, alignItems: 'center', gap: 9 }}
-          >
-            <Text variant="caption" dim>
-              {label}
-            </Text>
-            <View
-              style={{
-                width: 36,
-                height: 40,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: done ? c.accent : current ? c.surface2 : 'transparent',
-                borderWidth: current ? 1 : 0,
-                borderColor: c.accent,
-              }}
-            >
-              {done ? (
-                <Ionicons name="checkmark" size={20} color={c.onAccent} />
-              ) : (
-                <Text variant="label" accent={current}>
-                  {date.getDate()}
-                </Text>
-              )}
-            </View>
-          </View>
-        );
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        paddingVertical: 15,
+        opacity: pressed ? 0.65 : 1,
+        borderBottomWidth: 1,
+        borderColor: c.border,
       })}
-    </Row>
-  );
-}
-
-const styles = StyleSheet.create({
-  content: {
-    padding: Spacing.five,
-    gap: Spacing.three,
-  },
-});
-
-/**
- * Lo que hay puesto en la agenda. Lo atrasado no se esconde: se marca y se
- * queda ahí hasta que lo hagas o lo quites.
- */
-function Agenda() {
-  const c = useTheme();
-  const store = useStore();
-  const items = store.upcoming();
-
-  if (items.length === 0) return null;
-
-  const startScheduled = (scheduleId: string, routineId: string) => {
-    const session = store.startSession({ routineId });
-    store.unschedule(scheduleId);
-    router.push(`/session/${session.id}`);
-  };
-
-  return (
-    <>
-      <SectionHeader title="Agenda" />
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        {items.slice(0, 5).map((item, i) => {
-          const routine = store.routineById(item.routineId);
-          const days = daysUntil(item.at);
-          const late = days < 0;
-          const today = days === 0;
-
-          return (
-            <View key={item.id}>
-              {i > 0 ? <Divider /> : null}
-              <Row gap={Spacing.three} style={{ padding: Spacing.four, alignItems: 'flex-start' }}>
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: Radius.sm,
-                    backgroundColor: late || today ? c.accentSoft : c.surface2,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons
-                    name={late ? 'alert-circle' : 'calendar'}
-                    size={18}
-                    color={late || today ? c.accent : c.textDim}
-                  />
-                </View>
-
-                <View style={{ flex: 1, gap: Spacing.one }}>
-                  <Text variant="heading" numberOfLines={1}>
-                    {routine?.name ?? 'Rutina'}
-                  </Text>
-                  <Row gap={Spacing.two}>
-                    <Text variant="caption" dim>
-                      {formatWhen(item.at)}
-                    </Text>
-                    {late ? <Badge label="Sin hacer" tone="accent" /> : null}
-                  </Row>
-                  {(today || late) && !store.activeSession ? (
-                    <Button
-                      title="Empezar ahora"
-                      icon="play"
-                      small
-                      style={{ alignSelf: 'flex-start', marginTop: Spacing.one }}
-                      onPress={() => startScheduled(item.id, item.routineId)}
-                    />
-                  ) : null}
-                </View>
-
-                <IconButton name="close" size={18} onPress={() => store.unschedule(item.id)} />
-              </Row>
-            </View>
-          );
-        })}
-      </Card>
-    </>
+    >
+      <Row>
+        <Ionicons name={icon} size={23} color={c.accent} />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text variant="heading">{title}</Text>
+          <Text variant="caption" dim>
+            {detail}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={c.textDim} />
+      </Row>
+    </Pressable>
   );
 }

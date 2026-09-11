@@ -10,8 +10,8 @@ import { useTheme } from '@/hooks/use-theme';
 type TabIcon = keyof typeof Ionicons.glyphMap;
 
 const TABS: { name: string; title: string; icon: TabIcon; iconOff: TabIcon }[] = [
-  { name: 'index', title: 'Hoy', icon: 'flame', iconOff: 'flame-outline' },
-  { name: 'routines', title: 'Rutinas', icon: 'layers', iconOff: 'layers-outline' },
+  { name: 'index', title: 'Entrenar', icon: 'barbell', iconOff: 'barbell-outline' },
+  { name: 'routines', title: 'Plan', icon: 'layers', iconOff: 'layers-outline' },
   { name: 'history', title: 'Historial', icon: 'calendar', iconOff: 'calendar-outline' },
   { name: 'progress', title: 'Progreso', icon: 'stats-chart', iconOff: 'stats-chart-outline' },
 ];
@@ -37,7 +37,7 @@ export default function TabsLayout() {
           paddingBottom: insets.bottom,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '700',
           letterSpacing: 0.1,
           lineHeight: 14,
@@ -45,7 +45,8 @@ export default function TabsLayout() {
           // El icono se lleva su alto; la etiqueta no cede el suyo.
           flexShrink: 0,
         },
-      }}>
+      }}
+    >
       {TABS.map((tab) => (
         <Tabs.Screen
           key={tab.name}

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { BarChart, LineChart, type Point } from '@/components/chart';
+import { WorkloadPanel } from '@/components/workload-panel';
 import { ExercisePicker } from '@/components/exercise-picker';
 import {
   Card,
@@ -96,7 +97,9 @@ export default function ProgressScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenTitle title="Progreso" overline="Cómo vas evolucionando" />
+        <ScreenTitle title="Tu progreso" />
+        <Text dim>Tu constancia, tus marcas y el trabajo detrás.</Text>
+        <WorkloadPanel />
 
         {finished.length === 0 ? (
           <Card>

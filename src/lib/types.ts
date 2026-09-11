@@ -177,6 +177,7 @@ export interface Session {
 }
 
 export interface Settings {
+  theme?: 'system' | 'light' | 'dark';
   lastBackupAt?: string;
   unit: 'kg' | 'lb';
   defaultRestSec: number;
