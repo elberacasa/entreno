@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 
 import { uid } from '@/lib/id';
 import { mergeRoutine, type PortableRoutine } from '@/lib/routine-transfer';
+import { mergeWeeklyPlan, type WeeklyDraft } from '@/lib/weekly-plan';
 import {
   KEYS,
   KEY_LABEL,
@@ -24,6 +25,7 @@ import {
   type SessionEntry,
   type SetLog,
   type Settings,
+  type TrainingProfile,
 } from '@/lib/types';
 
 interface Store extends AppData {
@@ -61,6 +63,11 @@ interface Store extends AppData {
    */
   upsertRoutine: (r: Routine) => Promise<string | null>;
   importRoutine: (bundle: PortableRoutine) => Promise<string | null>;
+  saveWeeklyPlan: (
+    draft: WeeklyDraft,
+    profile: TrainingProfile,
+    focus: string,
+  ) => Promise<string | null>;
   deleteRoutine: (id: string) => void;
   duplicateRoutine: (id: string) => Routine | undefined;
   routineById: (id: string) => Routine | undefined;
@@ -434,6 +441,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           return null;
         } catch {
           return 'la copia de seguridad';
+        } finally {
+          replacingRef.current = false;
+        }
+      },
+
+      async saveWeeklyPlan(draft, profile, focus) {
+        if (!ready || replacingRef.current || brokenRef.current.length) return 'el guardado';
+        replacingRef.current = true;
+        try {
+          const next = mergeWeeklyPlan(dataRef.current, draft, profile, focus);
+          const failed = await persist(KEYS.routines, () => saveSnapshot(next));
+          if (!failed) {
+            dataRef.current = next;
+            setData(next);
+          }
+          return failed;
+        } catch {
+          return 'el plan semanal';
         } finally {
           replacingRef.current = false;
         }

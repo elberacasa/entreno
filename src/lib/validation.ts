@@ -78,6 +78,19 @@ export const sessionSchema = z.object({
     .refine(unique),
 });
 export const settingsSchema = z.object({
+  weeklyPlan: z
+    .object({
+      version: z.literal(1),
+      focus: z.string(),
+      days: z
+        .array(z.object({ weekday: z.number().int().min(0).max(6), routineId: id }))
+        .min(2)
+        .max(6)
+        .refine((days) => new Set(days.map((day) => day.weekday)).size === days.length)
+        .refine((days) => new Set(days.map((day) => day.routineId)).size === days.length),
+      updatedAt: date,
+    })
+    .optional(),
   theme: z.enum(['system', 'light', 'dark']).optional(),
   unit: z.enum(['kg', 'lb']),
   defaultRestSec: number,

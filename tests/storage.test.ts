@@ -25,6 +25,8 @@ import {
   type AppData,
 } from '@/lib/storage';
 import { DEFAULT_SETTINGS } from '@/lib/types';
+import { seedExercises } from '@/lib/seed';
+import { buildWeeklyPlan, mergeWeeklyPlan, QUICK_PROFILE, DEFAULT_DAYS } from '@/lib/weekly-plan';
 
 const empty = (): AppData => ({
   exercises: [],
@@ -85,6 +87,24 @@ describe('backup validation and migration', () => {
 });
 
 describe('atomic snapshots', () => {
+  it('keeps an entire prior week on a failed plan save and saves all assignments on retry', async () => {
+    const initial = { ...empty(), exercises: seedExercises() };
+    await saveSnapshot(initial);
+    const previous = disk.get(SNAPSHOT_KEY);
+    const draft = buildWeeklyPlan(QUICK_PROFILE, DEFAULT_DAYS[3], 'Equilibrado', initial.exercises);
+    const next = mergeWeeklyPlan(initial, draft, QUICK_PROFILE, 'Equilibrado');
+    adapter.setItem.mockRejectedValueOnce(new Error('quota'));
+    await expect(saveSnapshot(next)).rejects.toThrow('quota');
+    expect(disk.get(SNAPSHOT_KEY)).toBe(previous);
+    await saveSnapshot(next);
+    const loaded = await loadAll();
+    expect(loaded.data.routines).toHaveLength(3);
+    expect(loaded.data.settings.weeklyPlan?.days).toHaveLength(3);
+    expect(parseBackup(JSON.stringify(exportPayload(loaded.data)))?.settings.weeklyPlan).toEqual(
+      next.settings.weeklyPlan,
+    );
+  });
+
   it('keeps the prior entire snapshot on a failed restore and permits retry', async () => {
     await saveSnapshot(empty());
     const previous = disk.get(SNAPSHOT_KEY);

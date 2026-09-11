@@ -176,7 +176,15 @@ export interface Session {
   entries: SessionEntry[];
 }
 
+export interface WeeklyPlan {
+  version: 1;
+  focus: string;
+  days: { weekday: number; routineId: string }[];
+  updatedAt: string;
+}
+
 export interface Settings {
+  weeklyPlan?: WeeklyPlan;
   theme?: 'system' | 'light' | 'dark';
   lastBackupAt?: string;
   unit: 'kg' | 'lb';
