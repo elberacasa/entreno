@@ -45,7 +45,7 @@ function Recommended() {
   const c = useTheme();
   const store = useStore();
   const { notify } = useDialog();
-  const [wizard, setWizard] = useState({ open: false, seq: 0 });
+  const [wizard, setWizard] = useState({ open: !store.settings.profile, seq: 0 });
   const [demo, setDemo] = useState<Exercise | null>(null);
 
   const profile = store.settings.profile ?? null;
@@ -99,7 +99,8 @@ function Recommended() {
 
     await notify({
       title: one ? 'Rutina añadida' : `${days.length} rutinas añadidas`,
-      message: 'Ya las tienes en Rutinas, listas para empezar. Puedes editarlas como cualquier otra.',
+      message:
+        'Ya las tienes en Rutinas, listas para empezar. Puedes editarlas como cualquier otra.',
     });
     router.back();
   };
@@ -114,13 +115,14 @@ function Recommended() {
           gap: Spacing.three,
           paddingBottom: Spacing.seven,
         }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         {!profile ? (
           <Card>
             <EmptyState
               icon="clipboard-outline"
               title="Todavía no sé nada de ti"
-              hint="Responde cuatro preguntas sobre tu material, tu tiempo y tu objetivo y te preparo el plan."
+              hint="Responde cinco preguntas sobre tu material, tu tiempo y tu objetivo y te preparo el plan."
               action="Empezar cuestionario"
               onAction={openWizard}
             />
@@ -137,7 +139,13 @@ function Recommended() {
                     {profile.daysPerWeek} días · {profile.minutesPerSession} min
                   </Text>
                 </View>
-                <Button title="Cambiar" icon="create-outline" variant="secondary" small onPress={openWizard} />
+                <Button
+                  title="Cambiar"
+                  icon="create-outline"
+                  variant="secondary"
+                  small
+                  onPress={openWizard}
+                />
               </Row>
               <Text variant="caption" dim style={{ lineHeight: 18 }}>
                 {describeEquipment(profile.equipment)}
@@ -207,7 +215,8 @@ function Recommended() {
                         key={`${item.exerciseId}-${i}`}
                         onPress={() => (exercise ? setDemo(exercise) : null)}
                         disabled={!exercise}
-                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                      >
                         <Row gap={Spacing.three}>
                           <DemoThumb exerciseId={item.exerciseId} size={34} />
                           <View style={{ flex: 1, gap: Spacing.half }}>
@@ -247,7 +256,11 @@ function Recommended() {
               />
             ) : null}
 
-            <Text variant="caption" faint style={{ lineHeight: 17, paddingHorizontal: Spacing.one }}>
+            <Text
+              variant="caption"
+              faint
+              style={{ lineHeight: 17, paddingHorizontal: Spacing.one }}
+            >
               Los pesos los pones tú en el primer entreno: empieza con algo que puedas mover con
               buena técnica y ve subiendo. La app te enseñará lo que hiciste la última vez.
             </Text>

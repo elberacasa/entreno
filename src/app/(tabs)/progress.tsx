@@ -64,7 +64,9 @@ export default function ProgressScreen() {
    */
   const metric: ReturnType<typeof metricFor> =
     kindMetric.key === 'best1RM' && history.length > 0 && history.every((p) => p.best1RM === 0)
-      ? { key: 'topWeightKg', label: 'Mejor peso', suffix: 'kg' }
+      ? history.every((p) => p.topWeightKg === 0)
+        ? { key: 'topReps', label: 'Mejores repeticiones', suffix: 'reps' }
+        : { key: 'topWeightKg', label: 'Mejor peso', suffix: 'kg' }
       : kindMetric;
 
   const weeklyPoints: Point[] = weeks.map((w) => ({
@@ -92,7 +94,8 @@ export default function ProgressScreen() {
           gap: Spacing.three,
           paddingBottom: bottomPadding,
         }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <ScreenTitle title="Progreso" overline="Cómo vas evolucionando" />
 
         {finished.length === 0 ? (
@@ -131,7 +134,8 @@ export default function ProgressScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ gap: Spacing.two, paddingRight: Spacing.two }}
-                style={{ flex: 1 }}>
+                style={{ flex: 1 }}
+              >
                 {trained.slice(0, 12).map((id) => (
                   <Chip
                     key={id}
@@ -157,15 +161,12 @@ export default function ProgressScreen() {
                 <LineChart
                   data={seriesPoints}
                   width={chartWidth}
-                  suffix={metric.suffix}
+                  suffix={metric.suffix === 'kg' ? settings.unit : metric.suffix}
                   format={
                     exercise.kind === 'time'
                       ? (v) => formatDuration(v)
                       : (v) =>
-                          num(
-                            exercise.kind === 'strength' ? toDisplayWeight(v, settings.unit) : v,
-                            1,
-                          )
+                          num(metric.suffix === 'kg' ? toDisplayWeight(v, settings.unit) : v, 1)
                   }
                 />
 
@@ -193,7 +194,13 @@ export default function ProgressScreen() {
                             ? '—'
                             : num(toDisplayWeight(pr.best1RM, settings.unit), 1)
                         }
-                        unit={pr.best1RM === 0 ? '>12 reps' : settings.unit}
+                        unit={
+                          pr.best1RM === 0
+                            ? pr.maxWeightKg === 0
+                              ? 'sin carga'
+                              : '>12 reps'
+                            : settings.unit
+                        }
                       />
                     </>
                   ) : exercise.kind === 'cardio' ? (

@@ -102,7 +102,8 @@ export function LineChart({
               fill={c.textFaint}
               fontSize={10}
               fontWeight="700"
-              textAnchor="end">
+              textAnchor="end"
+            >
               {fmt(v)}
             </SvgText>
           </React.Fragment>
@@ -170,7 +171,8 @@ export function BarChart({
 
   const fmt = format ?? ((v: number) => String(Math.round(v)));
   const plotW = Math.max(40, width - AXIS_W);
-  const max = Math.max(...data.map((d) => d.value), 1);
+  const dataMax = Math.max(...data.map((d) => d.value), 0);
+  const max = Math.max(dataMax, 1);
   const slot = plotW / data.length;
   const barW = Math.max(6, Math.min(30, slot * 0.6));
   const top = 12;
@@ -199,7 +201,8 @@ export function BarChart({
               fill={c.textFaint}
               fontSize={10}
               fontWeight="700"
-              textAnchor="end">
+              textAnchor="end"
+            >
               {fmt(g.v)}
             </SvgText>
           </React.Fragment>
@@ -229,7 +232,7 @@ export function BarChart({
           {data[0].label}
         </Text>
         <Text variant="caption" dim>
-          máx {fmt(max)} {suffix}
+          máx {fmt(dataMax)} {suffix}
         </Text>
         <Text variant="caption" faint>
           {data[data.length - 1].label}

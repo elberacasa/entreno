@@ -65,7 +65,8 @@ export default function RoutinesScreen() {
           gap: Spacing.three,
           paddingBottom: bottomPadding,
         }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <ScreenTitle
           title="Rutinas"
           right={
@@ -129,7 +130,8 @@ export default function RoutinesScreen() {
                 <Card key={r.id} style={{ gap: Spacing.three, padding: Spacing.three }}>
                   <Pressable
                     onPress={() => router.push(`/routine/${r.id}`)}
-                    style={({ pressed }) => ({ gap: Spacing.two, opacity: pressed ? 0.6 : 1 })}>
+                    style={({ pressed }) => ({ gap: Spacing.two, opacity: pressed ? 0.6 : 1 })}
+                  >
                     <Row>
                       <View style={{ flex: 1, gap: Spacing.half }}>
                         <Text variant="title" numberOfLines={1}>
@@ -225,13 +227,14 @@ function PlanCard() {
                 backgroundColor: c.surface,
                 alignItems: 'center',
                 justifyContent: 'center',
-              }}>
+              }}
+            >
               <Ionicons name="sparkles" size={19} color={c.accent} />
             </View>
             <View style={{ flex: 1, gap: Spacing.half }}>
               <Text variant="heading">¿No sabes por dónde empezar?</Text>
               <Text variant="caption" dim style={{ lineHeight: 18 }}>
-                Cuatro preguntas sobre tu material, tu tiempo y tu objetivo, y te preparo las
+                Cinco preguntas sobre tu material, tu tiempo y tu objetivo, y te preparo las
                 rutinas.
               </Text>
             </View>

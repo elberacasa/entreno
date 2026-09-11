@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 
 import { Badge, Row, Sheet, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -32,7 +32,20 @@ export function ExerciseDemo({
 }) {
   const c = useTheme();
   const frames = EXERCISE_DEMOS[exerciseId];
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (mounted) setPlaying(!reduced);
+    });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (reduced) =>
+      setPlaying(!reduced),
+    );
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const animated = playing && (frames?.length ?? 0) > 1;
   const now = useNow(animated, FRAME_MS);
@@ -51,7 +64,8 @@ export function ExerciseDemo({
           justifyContent: 'center',
           gap: Spacing.two,
           padding: Spacing.four,
-        }}>
+        }}
+      >
         <Ionicons name="image-outline" size={26} color={c.textFaint} />
         <Text variant="caption" faint center style={{ lineHeight: 17 }}>
           Este ejercicio todavía no tiene demostración.
@@ -61,7 +75,11 @@ export function ExerciseDemo({
   }
 
   return (
-    <Pressable onPress={() => setPlaying((p) => !p)}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={playing ? 'Pausar demostración' : 'Reproducir demostración'}
+      onPress={() => setPlaying((p) => !p)}
+    >
       <View
         style={{
           height,
@@ -70,8 +88,12 @@ export function ExerciseDemo({
           backgroundColor: c.surface2,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: c.border,
-        }}>
+        }}
+      >
         <Image
+          accessibilityLabel={
+            index === 0 ? 'Posición inicial del ejercicio' : 'Posición final del ejercicio'
+          }
           source={frames[index]}
           style={{ width: '100%', height: '100%' }}
           contentFit="cover"
@@ -81,10 +103,8 @@ export function ExerciseDemo({
         {/* Al pausar aparece el icono; mientras corre no molesta. */}
         {playing ? null : (
           <View
-            style={[
-              StyleSheet.absoluteFill,
-              { alignItems: 'center', justifyContent: 'center' },
-            ]}>
+            style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+          >
             <View
               style={{
                 width: 48,
@@ -93,7 +113,8 @@ export function ExerciseDemo({
                 backgroundColor: c.scrim,
                 alignItems: 'center',
                 justifyContent: 'center',
-              }}>
+              }}
+            >
               <Ionicons name="play" size={22} color="#FFFFFF" />
             </View>
           </View>
@@ -151,7 +172,8 @@ export function DemoThumb({ exerciseId, size = 44 }: { exerciseId: string; size?
         backgroundColor: c.surface2,
         alignItems: 'center',
         justifyContent: 'center',
-      }}>
+      }}
+    >
       {frames?.length ? (
         <Image source={frames[0]} style={{ width: '100%', height: '100%' }} contentFit="cover" />
       ) : (
@@ -174,7 +196,8 @@ export function DemoButton({ onPress }: { onPress: () => void }) {
         gap: Spacing.one,
         paddingVertical: 2,
         opacity: pressed ? 0.6 : 1,
-      })}>
+      })}
+    >
       <Ionicons name="play-circle-outline" size={15} color={c.accent} />
       <Text variant="caption" accent>
         Cómo se hace

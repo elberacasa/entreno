@@ -21,7 +21,7 @@ import {
 const DAYS = ['2', '3', '4', '5', '6'] as const;
 const MINUTES = ['30', '45', '60', '75', '90'] as const;
 
-const STEPS = ['Material', 'Días', 'Tiempo', 'Objetivo'];
+const STEPS = ['Material', 'Días', 'Tiempo', 'Objetivo', 'Experiencia'];
 
 /** Fila con marca de selección, para listas donde cada opción necesita explicación. */
 function OptionRow({
@@ -48,6 +48,9 @@ function OptionRow({
 
   return (
     <Pressable
+      accessibilityRole={multiple ? 'checkbox' : 'radio'}
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={title}
       onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
@@ -59,7 +62,8 @@ function OptionRow({
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: selected ? c.accent : c.border,
         opacity: pressed ? 0.7 : 1,
-      })}>
+      })}
+    >
       <Ionicons name={icon} size={22} color={selected ? c.accent : c.textFaint} />
       <View style={{ flex: 1, gap: Spacing.half }}>
         <Text variant="heading">{title}</Text>
@@ -102,6 +106,9 @@ export function ProfileWizard({
   );
   const [goal, setGoal] = useState<Goal>(initial?.goal ?? DEFAULT_PROFILE.goal);
 
+  const [experience, setExperience] = useState<'beginner' | 'regular'>(
+    initial?.experience ?? 'beginner',
+  );
   const last = step === STEPS.length - 1;
 
   const toggle = (item: Equipment) =>
@@ -116,6 +123,7 @@ export function ProfileWizard({
     }
     onDone({
       equipment,
+      experience,
       daysPerWeek: Number(days),
       minutesPerSession: Number(minutes),
       goal,
@@ -146,7 +154,8 @@ export function ProfileWizard({
             onPress={next}
           />
         </Row>
-      }>
+      }
+    >
       <View style={{ gap: Spacing.two }}>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text variant="overline" accent>
@@ -206,12 +215,13 @@ export function ProfileWizard({
               backgroundColor: c.surface,
               borderWidth: StyleSheet.hairlineWidth,
               borderColor: c.border,
-            }}>
+            }}
+          >
             <Text variant="body" dim style={{ lineHeight: 21 }}>
               {days === '2'
                 ? 'Dos días: cuerpo completo en cada sesión, centrado en los básicos.'
                 : days === '3'
-                  ? 'Tres días: empuje, tirón y pierna, cada patrón una vez por semana. Si acabas de empezar te cunde más una rutina de cuerpo completo del catálogo, repetida los tres días.'
+                  ? 'Tres sesiones por semana. Al final ajustaremos el reparto a tu experiencia.'
                   : days === '4'
                     ? 'Cuatro días: torso y pierna, dos veces cada uno.'
                     : days === '5'
@@ -226,8 +236,8 @@ export function ProfileWizard({
         <>
           <Text variant="title">¿Cuánto dura tu entreno?</Text>
           <Text variant="body" dim style={{ lineHeight: 21 }}>
-            Minutos por sesión, contando el calentamiento. Ajusto cuántos ejercicios entran para
-            que no se te haga eterno.
+            Minutos por sesión, contando el calentamiento. Ajusto cuántos ejercicios entran para que
+            no se te haga eterno.
           </Text>
           <Segmented<string>
             value={minutes}
@@ -259,6 +269,26 @@ export function ProfileWizard({
             ))}
           </View>
         </>
+      ) : null}
+      {step === 4 ? (
+        <View style={{ gap: Spacing.four }}>
+          <Text variant="title">¿Cómo llevas el entrenamiento?</Text>
+          <Text dim style={{ lineHeight: 22 }}>
+            Esto nos ayuda a elegir el reparto de la semana. Siempre puedes editar las rutinas.
+          </Text>
+          <OptionRow
+            title="Estoy empezando"
+            hint="Estoy aprendiendo los movimientos o retomando el hábito."
+            selected={experience === 'beginner'}
+            onPress={() => setExperience('beginner')}
+          />
+          <OptionRow
+            title="Entreno con regularidad"
+            hint="Ya conozco los ejercicios y registro mis entrenos."
+            selected={experience === 'regular'}
+            onPress={() => setExperience('regular')}
+          />
+        </View>
       ) : null}
     </Sheet>
   );

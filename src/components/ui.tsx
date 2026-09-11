@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useId } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -50,7 +50,7 @@ const TEXT_STYLES: Record<TextVariant, TextStyle> = {
   body: { fontSize: 15, fontWeight: '500' },
   label: { fontSize: 13, fontWeight: '700' },
   caption: { fontSize: 12, fontWeight: '600' },
-  overline: { fontSize: 11, fontWeight: '800', letterSpacing: 1.1, textTransform: 'uppercase' },
+  overline: { fontSize: 13, fontWeight: '600', letterSpacing: 0.1 },
   mono: { fontSize: 15, fontWeight: '600', fontFamily: Fonts.mono, ...Tabular },
 };
 
@@ -89,7 +89,15 @@ export function Text({
   return (
     <RNText
       {...rest}
-      style={[TEXT_STYLES[variant], { color }, center && { textAlign: 'center' }, style]}
+      accessibilityRole={
+        variant === 'display' || variant === 'title' ? 'header' : rest.accessibilityRole
+      }
+      style={[
+        TEXT_STYLES[variant],
+        { color, fontFamily: Fonts.sans },
+        center && { textAlign: 'center' },
+        style,
+      ]}
     />
   );
 }
@@ -105,7 +113,13 @@ export function Screen({
 }) {
   const c = useTheme();
   return (
-    <SafeAreaView edges={edges} style={[{ flex: 1, backgroundColor: c.bg }, style]}>
+    <SafeAreaView
+      edges={edges}
+      style={[
+        { flex: 1, backgroundColor: c.bg, width: '100%', maxWidth: 800, alignSelf: 'center' },
+        style,
+      ]}
+    >
       <StorageBanner />
       {children}
     </SafeAreaView>
@@ -206,10 +220,9 @@ export function ProgressBar({
           overflow: 'hidden',
         },
         style,
-      ]}>
-      <View
-        style={{ width: `${pct}%`, height: '100%', backgroundColor: color ?? c.accent }}
-      />
+      ]}
+    >
+      <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color ?? c.accent }} />
     </View>
   );
 }
@@ -237,7 +250,8 @@ export function Badge({
         paddingVertical: 3,
         borderRadius: Radius.sm,
         backgroundColor: bg,
-      }}>
+      }}
+    >
       <RNText style={{ color: fg, fontSize: 11, fontWeight: '800', ...Tabular }}>{label}</RNText>
     </View>
   );
@@ -279,6 +293,9 @@ export function Button({
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
       {...rest}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -290,7 +307,7 @@ export function Button({
           backgroundColor: bg,
           // Alto fijo: así los botones de una misma fila quedan siempre iguales
           // aunque uno de los textos sea más largo.
-          height: small ? 38 : 50,
+          minHeight: small ? 44 : 52,
           paddingHorizontal: small ? Spacing.three : Spacing.four,
           borderRadius: small ? Radius.md : Radius.md,
           borderWidth: variant === 'ghost' || variant === 'danger' ? StyleSheet.hairlineWidth : 0,
@@ -298,7 +315,8 @@ export function Button({
           opacity: disabled ? 0.35 : pressed ? 0.7 : 1,
         },
         style as StyleProp<ViewStyle>,
-      ]}>
+      ]}
+    >
       {loading ? (
         <ActivityIndicator color={fg} size="small" />
       ) : (
@@ -313,7 +331,8 @@ export function Button({
               fontWeight: '700',
               letterSpacing: -0.2,
               flexShrink: 1,
-            }}>
+            }}
+          >
             {title}
           </RNText>
         </>
@@ -321,6 +340,20 @@ export function Button({
     </Pressable>
   );
 }
+
+const ICON_LABELS: Partial<Record<keyof typeof Ionicons.glyphMap, string>> = {
+  'settings-outline': 'Ajustes',
+  close: 'Cerrar',
+  'trash-outline': 'Eliminar',
+  'copy-outline': 'Duplicar',
+  'calendar-outline': 'Programar',
+  add: 'Crear rutina',
+  'arrow-up': 'Mover arriba',
+  'arrow-down': 'Mover abajo',
+  'chevron-up': 'Mover arriba',
+  'chevron-down': 'Mover abajo',
+  search: 'Buscar ejercicio',
+};
 
 export function IconButton({
   name,
@@ -339,7 +372,9 @@ export function IconButton({
   const c = useTheme();
   return (
     <Pressable
-      hitSlop={10}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={ICON_LABELS[name] ?? 'Abrir opciones'}
       {...rest}
       style={({ pressed }) => [
         surface && {
@@ -350,9 +385,16 @@ export function IconButton({
           alignItems: 'center',
           justifyContent: 'center',
         },
-        { opacity: pressed ? 0.5 : 1 },
+        {
+          minWidth: 40,
+          minHeight: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.5 : 1,
+        },
         style as StyleProp<ViewStyle>,
-      ]}>
+      ]}
+    >
       <Ionicons name={name} size={size} color={color ?? c.textDim} />
     </Pressable>
   );
@@ -379,15 +421,13 @@ export function Field({
   containerStyle?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const fieldId = useId();
   return (
     <View
-      style={[
-        { gap: Spacing.two },
-        full ? { alignSelf: 'stretch' } : { flex: 1 },
-        containerStyle,
-      ]}>
+      style={[{ gap: Spacing.two }, full ? { alignSelf: 'stretch' } : { flex: 1 }, containerStyle]}
+    >
       {label ? (
-        <Text variant="overline" faint>
+        <Text nativeID={fieldId} variant="overline" faint>
           {label}
         </Text>
       ) : null}
@@ -400,8 +440,11 @@ export function Field({
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: c.border,
           paddingHorizontal: Spacing.three,
-        }}>
+        }}
+      >
         <TextInput
+          accessibilityLabel={label}
+          accessibilityLabelledBy={label ? fieldId : undefined}
           placeholderTextColor={c.textFaint}
           {...rest}
           style={[
@@ -440,29 +483,31 @@ export function Chip({
   const c = useTheme();
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: Boolean(selected) }}
       onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.one + 2,
-        height: 34,
+        minHeight: 44,
         paddingHorizontal: Spacing.three,
         borderRadius: Radius.pill,
         backgroundColor: selected ? c.accent : c.surface2,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: selected ? c.accent : c.border,
         opacity: pressed ? 0.7 : 1,
-      })}>
-      {icon ? (
-        <Ionicons name={icon} size={14} color={selected ? c.onAccent : c.textDim} />
-      ) : null}
+      })}
+    >
+      {icon ? <Ionicons name={icon} size={14} color={selected ? c.onAccent : c.textDim} /> : null}
       <RNText
         numberOfLines={1}
         style={{
           color: selected ? c.onAccent : c.textDim,
           fontSize: 13,
           fontWeight: '700',
-        }}>
+        }}
+      >
         {label}
       </RNText>
     </Pressable>
@@ -488,29 +533,34 @@ export function Segmented<T extends string>({
         borderRadius: Radius.md,
         padding: 3,
         gap: 3,
-      }}>
+      }}
+    >
       {options.map((o) => {
         const active = o.value === value;
         return (
           <Pressable
             key={o.value}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
             onPress={() => onChange(o.value)}
             style={({ pressed }) => ({
               flex: 1,
-              height: 32,
+              minHeight: 44,
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: Radius.sm + 1,
               backgroundColor: active ? c.accent : 'transparent',
               opacity: pressed && !active ? 0.6 : 1,
-            })}>
+            })}
+          >
             <RNText
               numberOfLines={1}
               style={{
                 color: active ? c.onAccent : c.textDim,
                 fontSize: 13,
                 fontWeight: '700',
-              }}>
+              }}
+            >
               {o.label}
             </RNText>
           </Pressable>
@@ -541,7 +591,8 @@ export function StatTile({
         variant={size === 'lg' ? 'metric' : 'metricSm'}
         accent={accent}
         numberOfLines={1}
-        adjustsFontSizeToFit>
+        adjustsFontSizeToFit
+      >
         {value}
         {unit ? (
           <RNText
@@ -550,7 +601,8 @@ export function StatTile({
               fontWeight: '700',
               color: c.textFaint,
               letterSpacing: 0,
-            }}>
+            }}
+          >
             {' '}
             {unit}
           </RNText>
@@ -578,7 +630,8 @@ export function SectionHeader({
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.one,
         marginTop: Spacing.two,
-      }}>
+      }}
+    >
       <Text variant="overline" faint numberOfLines={1} style={{ flex: 1 }}>
         {title}
       </Text>
@@ -619,7 +672,8 @@ export function EmptyState({
           borderColor: c.border,
           alignItems: 'center',
           justifyContent: 'center',
-        }}>
+        }}
+      >
         <Ionicons name={icon} size={26} color={c.textFaint} />
       </View>
       <Text variant="heading" center>
@@ -657,7 +711,8 @@ export function Sheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: c.surface }}>
           <Row
@@ -667,7 +722,8 @@ export function Sheet({
               paddingVertical: Spacing.three,
               borderBottomWidth: StyleSheet.hairlineWidth,
               borderBottomColor: c.border,
-            }}>
+            }}
+          >
             <Text variant="title">{title}</Text>
             <IconButton name="close" size={22} surface onPress={onClose} />
           </Row>
@@ -678,7 +734,8 @@ export function Sheet({
             padding: Spacing.four,
             gap: Spacing.three,
             paddingBottom: Spacing.seven,
-          }}>
+          }}
+        >
           {children}
         </ScrollView>
         {footer ? (
@@ -688,7 +745,8 @@ export function Sheet({
                 padding: Spacing.four,
                 borderTopWidth: StyleSheet.hairlineWidth,
                 borderTopColor: c.border,
-              }}>
+              }}
+            >
               {footer}
             </View>
           </SafeAreaView>
