@@ -1,19 +1,35 @@
-:root {
-  --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
-  --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+@font-face {
+  font-family: 'Manrope';
+  src: url('/entreno/fonts/Manrope-Variable.ttf') format('truetype');
+  font-weight: 200 800;
+  font-display: swap;
 }
-
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/entreno/fonts/BarlowCondensed-Bold.ttf') format('truetype');
+  font-weight: 700 900;
+  font-display: swap;
+}
 :root {
+  --font-body: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', Impact, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-rounded: var(--font-body);
+  --font-serif: Georgia, serif;
   color-scheme: light dark;
 }
 :focus-visible {
-  outline: 2px solid #ff5a1f;
+  outline: 3px solid #739aff;
   outline-offset: 3px;
+}
+input,
+textarea,
+button {
+  font-family: var(--font-body);
+}
+::selection {
+  background: #b7cbff;
+  color: #17233d;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -21,5 +37,6 @@
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

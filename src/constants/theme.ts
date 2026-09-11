@@ -2,48 +2,43 @@ import '@/global.css';
 
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
-/**
- * Paleta oscura primero: fondo casi negro, superficies escalonadas para dar
- * profundidad y el naranja reservado para lo accionable y los récords. El tema
- * claro replica los mismos papeles para que ningún componente tenga que saber
- * en qué modo está.
- */
+/** AbenzaGym: court blue, chalk surfaces, and legible training data. */
 export const Colors = {
   light: {
-    bg: '#F1F3F6',
+    bg: '#F5F6FA',
     surface: '#FFFFFF',
-    surface2: '#E9EDF2',
-    surface3: '#DEE4EB',
-    border: '#D7DDE5',
-    borderStrong: '#B9C3CF',
-    text: '#0A0D11',
-    textDim: '#586474',
-    textFaint: '#626E7E',
-    accent: '#DC4708',
-    accentDim: '#F0A283',
-    accentSoft: '#FCE7DC',
+    surface2: '#EBEFF8',
+    surface3: '#DFE6F4',
+    border: '#DCE2EF',
+    borderStrong: '#A8B5D0',
+    text: '#17233D',
+    textDim: '#53617C',
+    textFaint: '#5C6B87',
+    accent: '#244CE8',
+    accentDim: '#A7B7F8',
+    accentSoft: '#E6ECFF',
     onAccent: '#FFFFFF',
     success: '#047857',
     danger: '#C81E1E',
     warn: '#A15C07',
-    shadow: '#0A0D11',
+    shadow: '#17233D',
     scrim: 'rgba(10, 13, 17, 0.45)',
   },
   dark: {
-    bg: '#08090C',
-    surface: '#111419',
-    surface2: '#191D25',
-    surface3: '#232833',
-    border: '#242A34',
-    borderStrong: '#3A414F',
-    text: '#F4F7FA',
-    textDim: '#B1BAC8',
-    textFaint: '#939EAF',
-    accent: '#FF5A1F',
-    accentDim: '#8A3411',
-    accentSoft: '#26120A',
-    onAccent: '#0A0B0E',
-    success: '#2DD46F',
+    bg: '#111B35',
+    surface: '#192641',
+    surface2: '#223253',
+    surface3: '#2E4065',
+    border: '#344566',
+    borderStrong: '#62749A',
+    text: '#F5F7FD',
+    textDim: '#C0CEE7',
+    textFaint: '#A9B9D5',
+    accent: '#A9C8FF',
+    accentDim: '#4D6EBA',
+    accentSoft: '#21395F',
+    onAccent: '#111B35',
+    success: '#7BE0BE',
     danger: '#F26B6B',
     warn: '#FBBF24',
     shadow: '#000000',
@@ -57,18 +52,21 @@ export type ThemeColor = keyof Palette;
 export const Fonts = Platform.select({
   ios: {
     sans: 'system-ui',
+    display: 'system-ui',
     serif: 'ui-serif',
     rounded: 'ui-rounded',
     mono: 'ui-monospace',
   },
   default: {
     sans: 'normal',
+    display: 'normal',
     serif: 'serif',
     rounded: 'normal',
     mono: 'monospace',
   },
   web: {
-    sans: 'var(--font-display)',
+    sans: 'var(--font-body)',
+    display: 'var(--font-display)',
     serif: 'var(--font-serif)',
     rounded: 'var(--font-rounded)',
     mono: 'var(--font-mono)',
@@ -118,6 +116,6 @@ export function elevation(level: 1 | 2 | 3, color: string): ViewStyle {
 }
 
 /** Alto de la barra de pestañas sin contar el área segura de abajo. */
-export const TabBarHeight = 58;
+export const TabBarHeight = 68;
 
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 1120;

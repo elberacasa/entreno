@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">AbenzaGym</title>
+  <desc id="desc">An ascending A crossed by a lifting bar, built from three independent shapes.</desc>
+  <g id="stance-left" fill="#244CE8"><path d="M13 101 49 19h23l-36 82z"/></g>
+  <g id="stance-right" fill="#244CE8"><path d="m76 35 32 66H83L64 58z"/></g>
+  <g id="lifting-bar" fill="#244CE8"><path d="M39 76h46v13H39z"/></g>
+</svg>

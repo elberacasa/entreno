@@ -1,63 +1,38 @@
-/**
- * Genera los iconos PNG de la PWA a partir de un SVG.
- *
- *   node scripts/make-icons.mjs
- *
- * Solo hay que volver a ejecutarlo si cambia el dibujo o los colores.
- */
-import { mkdir, writeFile } from 'node:fs/promises';
+// Generate every PWA icon from the animation-ready AbenzaGym vector source.
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 import sharp from 'sharp';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'public', 'icons');
-
-const BG = '#0C0F13';
-const FG = '#FF6B35';
-
-/**
- * Una mancuerna centrada. `scale` encoge el dibujo dejando margen: los iconos
- * "maskable" de Android se recortan en círculo y hay que respetar esa zona.
- */
-function svg(scale = 1) {
-  const shapes = [
-    // barra, discos y topes (todo centrado en y = 256)
-    [100, 224, 312, 64, 20],
-    [68, 156, 64, 200, 26],
-    [380, 156, 64, 200, 26],
-    [20, 206, 36, 100, 18],
-    [456, 206, 36, 100, 18],
-  ];
-
-  const body = shapes
-    .map(([x, y, w, h, r]) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}"/>`)
-    .join('');
-
-  const offset = (512 * (1 - scale)) / 2;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="${BG}"/>
-  <g fill="${FG}" transform="translate(${offset} ${offset}) scale(${scale})">${body}</g>
-</svg>`;
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const out = join(root, 'public/icons');
+const mark = await readFile(join(root, 'public/brand/abenzagym-mark.svg'), 'utf8');
+const paths = mark
+  .slice(mark.indexOf('<g'), mark.lastIndexOf('</svg>'))
+  .replaceAll('#244CE8', '#FFFFFF');
+function icon(scale) {
+  const offset = 60 * (1 - scale);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 120 120"><rect width="120" height="120" fill="#244CE8"/><g transform="translate(${offset} ${offset}) scale(${scale})">${paths}</g></svg>`;
 }
-
-const targets = [
-  { file: 'icon-192.png', size: 192, scale: 1 },
-  { file: 'icon-512.png', size: 512, scale: 1 },
-  { file: 'apple-touch-icon.png', size: 180, scale: 1 },
-  { file: 'maskable-512.png', size: 512, scale: 0.62 },
-];
-
-await mkdir(OUT, { recursive: true });
-
-for (const { file, size, scale } of targets) {
-  const png = await sharp(Buffer.from(svg(scale))).resize(size, size).png().toBuffer();
-  await writeFile(join(OUT, file), png);
-  console.log(`${file} (${size}x${size})`);
+await mkdir(out, { recursive: true });
+for (const [file, size, scale] of [
+  ['icon-192.png', 192, 0.82],
+  ['icon-512.png', 512, 0.82],
+  ['apple-touch-icon.png', 180, 0.82],
+  ['maskable-512.png', 512, 0.65],
+]) {
+  await sharp(Buffer.from(icon(scale)))
+    .resize(size, size)
+    .png()
+    .toFile(join(out, file));
 }
-
-// El SVG también sirve como favicon vectorial en escritorio.
-await writeFile(join(OUT, 'icon.svg'), svg());
-console.log('icon.svg');
+await writeFile(join(out, 'icon.svg'), icon(0.82));
+await sharp(Buffer.from(icon(0.82)))
+  .resize(512, 512)
+  .png()
+  .toFile(join(root, 'assets/images/icon.png'));
+await sharp(Buffer.from(icon(0.82)))
+  .resize(48, 48)
+  .png()
+  .toFile(join(root, 'assets/images/favicon.png'));
+console.log('Generated AbenzaGym app icons.');

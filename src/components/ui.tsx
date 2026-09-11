@@ -21,7 +21,7 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { StorageBanner } from '@/components/storage-banner';
 
-import { Fonts, Radius, Spacing, Tabular, elevation } from '@/constants/theme';
+import { Fonts, MaxContentWidth, Radius, Spacing, Tabular, elevation } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type TextVariant =
@@ -44,12 +44,12 @@ export type TextVariant =
 const TEXT_STYLES: Record<TextVariant, TextStyle> = {
   metric: { fontSize: 40, fontWeight: '800', letterSpacing: -1.6, ...Tabular },
   metricSm: { fontSize: 26, fontWeight: '800', letterSpacing: -0.9, ...Tabular },
-  display: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
-  title: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  display: { fontSize: 42, lineHeight: 46, fontWeight: '700', letterSpacing: -0.5 },
+  title: { fontSize: 28, lineHeight: 32, fontWeight: '700', letterSpacing: -0.3 },
   heading: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  body: { fontSize: 15, fontWeight: '500' },
+  body: { fontSize: 15, lineHeight: 23, fontWeight: '500' },
   label: { fontSize: 13, fontWeight: '700' },
-  caption: { fontSize: 12, fontWeight: '600' },
+  caption: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
   overline: { fontSize: 13, fontWeight: '600', letterSpacing: 0.1 },
   mono: { fontSize: 15, fontWeight: '600', fontFamily: Fonts.mono, ...Tabular },
 };
@@ -94,7 +94,14 @@ export function Text({
       }
       style={[
         TEXT_STYLES[variant],
-        { color, fontFamily: Fonts.sans },
+        {
+          color,
+          fontFamily: ['display', 'title', 'metric', 'metricSm'].includes(variant)
+            ? Fonts.display
+            : variant === 'mono'
+              ? Fonts.mono
+              : Fonts.sans,
+        },
         center && { textAlign: 'center' },
         style,
       ]}
@@ -116,7 +123,13 @@ export function Screen({
     <SafeAreaView
       edges={edges}
       style={[
-        { flex: 1, backgroundColor: c.bg, width: '100%', maxWidth: 800, alignSelf: 'center' },
+        {
+          flex: 1,
+          backgroundColor: c.bg,
+          width: '100%',
+          maxWidth: MaxContentWidth,
+          alignSelf: 'center',
+        },
         style,
       ]}
     >
@@ -327,6 +340,7 @@ export function Button({
             numberOfLines={1}
             style={{
               color: fg,
+              fontFamily: Fonts.sans,
               fontSize: small ? 13 : 15,
               fontWeight: '700',
               letterSpacing: -0.2,

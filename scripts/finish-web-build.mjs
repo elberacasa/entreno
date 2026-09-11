@@ -17,7 +17,7 @@ const DIST = join(ROOT, 'dist');
 const { expo } = JSON.parse(await readFile(join(ROOT, 'app.json'), 'utf8'));
 const base = (expo.experiments?.baseUrl ?? '').replace(/\/$/, '');
 const name = expo.name;
-const theme = '#0C0F13';
+const theme = '#111B35';
 const description = 'Planifica tus entrenamientos y sigue tu progreso.';
 
 const manifest = {
@@ -61,7 +61,7 @@ const head = `
     <style id="pwa-reset">
       html, body, #root { background-color: ${theme}; }
       @media (prefers-color-scheme: light) {
-        html, body, #root { background-color: #F4F6F8; }
+        html, body, #root { background-color: #F5F6FA; }
       }
       body {
         /* Ni rebote elástico ni zoom accidental con dos dedos. */
