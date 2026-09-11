@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +18,9 @@ import { ExercisePicker } from '@/components/exercise-picker';
 import { RestTimerBar, useRestTimer } from '@/components/rest-timer';
 import {
   Badge,
+  Chip,
+  Segmented,
+  Sheet,
   Button,
   Card,
   EmptyState,
@@ -59,7 +62,7 @@ import type { Exercise, SessionEntry, SetLog } from '@/lib/types';
 const INDEX_W = 22;
 const CHECK_W = 40;
 const CELL_GAP = Spacing.two;
-const ROW_H = 44;
+const ROW_H = 52;
 
 interface Column {
   key: 'weight' | 'reps' | 'rpe' | 'km' | 'time';
@@ -91,6 +94,9 @@ export default function SessionScreen() {
   const timer = useRestTimer();
   const { confirm, notify } = useDialog();
   const [picking, setPicking] = useState(false);
+  const [mode, setMode] = useState<'focus' | 'list'>('focus');
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const scroll = useRef<ScrollView>(null);
   const [saving, setSaving] = useState(false);
   const [demo, setDemo] = useState<Exercise | null>(null);
 
@@ -140,6 +146,7 @@ export default function SessionScreen() {
       void notify({ title: 'Revisa esta serie', message: error });
       return;
     }
+    setFocusId(entry.id);
     const next = !set.done;
     patchSet(entry.id, set.id, { done: next });
     if (next && entry.restSec) timer.start(entry.restSec);
@@ -263,6 +270,16 @@ export default function SessionScreen() {
 
   const totalSets = session.entries.reduce((acc, e) => acc + e.sets.length, 0);
   const doneSets = sessionSetCount(session);
+  const requestedIndex = session.entries.findIndex((entry) => entry.id === focusId);
+  const firstPending = session.entries.findIndex((entry) => entry.sets.some((set) => !set.done));
+  const focusedIndex = requestedIndex >= 0 ? requestedIndex : Math.max(0, firstPending);
+  const focus = !readOnly && mode === 'focus';
+  const goTo = (index: number) => {
+    const entry = session.entries[index];
+    if (!entry) return;
+    setFocusId(entry.id);
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  };
 
   return (
     <Screen edges={[]}>
@@ -274,12 +291,13 @@ export default function SessionScreen() {
         keyboardVerticalOffset={90}
       >
         <ScrollView
+          ref={scroll}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             padding: Spacing.four,
             gap: Spacing.three,
             // Deja sitio a la barra fija de abajo.
-            paddingBottom: readOnly ? Spacing.seven : 140,
+            paddingBottom: Spacing.five,
           }}
         >
           <Card style={{ gap: Spacing.three }}>
@@ -287,6 +305,7 @@ export default function SessionScreen() {
               <Text variant="title">{session.name}</Text>
             ) : (
               <TextInput
+                accessibilityLabel="Nombre de la sesión"
                 value={session.name}
                 onChangeText={(name) => store.updateSession(session.id, { name })}
                 placeholder="Nombre del entreno"
@@ -321,6 +340,49 @@ export default function SessionScreen() {
             <ProgressBar value={totalSets > 0 ? doneSets / totalSets : 0} />
           </Card>
 
+          {!readOnly && session.entries.length > 0 ? (
+            <View style={{ gap: 14 }}>
+              <Segmented
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'focus', label: 'Un ejercicio' },
+                  { value: 'list', label: 'Toda la sesión' },
+                ]}
+              />
+              {focus ? (
+                <>
+                  <Row style={{ justifyContent: 'space-between' }}>
+                    <Text variant="heading">
+                      Ejercicio {focusedIndex + 1} de {session.entries.length}
+                    </Text>
+                    <Text variant="caption" dim>
+                      Toca para cambiar
+                    </Text>
+                  </Row>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingVertical: 3 }}
+                  >
+                    {session.entries.map((entry, index) => (
+                      <Chip
+                        key={entry.id}
+                        label={`${index + 1}. ${entry.name}`}
+                        icon={
+                          entry.sets.length > 0 && entry.sets.every((set) => set.done)
+                            ? 'checkmark-circle'
+                            : undefined
+                        }
+                        selected={index === focusedIndex}
+                        onPress={() => goTo(index)}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              ) : null}
+            </View>
+          ) : null}
           {session.entries.length === 0 ? (
             <Card>
               <EmptyState
@@ -332,31 +394,53 @@ export default function SessionScreen() {
               />
             </Card>
           ) : (
-            session.entries.map((entry, index) => (
-              <EntryCard
-                key={entry.id}
-                entry={entry}
-                readOnly={readOnly}
-                sessionId={session.id}
-                first={index === 0}
-                last={index === session.entries.length - 1}
-                onToggle={(set) => toggleDone(entry, set)}
-                onChange={(setId, patch) => patchSet(entry.id, setId, patch)}
-                onAddSet={() => addSet(entry)}
-                onRemoveSet={(setId) => removeSet(entry.id, setId)}
-                onRemove={() => removeEntry(entry)}
-                onMoveUp={() => moveEntry(index, -1)}
-                onMoveDown={() => moveEntry(index, 1)}
-                onRest={(sec) =>
-                  patchEntries((entries) =>
-                    entries.map((e) => (e.id === entry.id ? { ...e, restSec: sec } : e)),
-                  )
-                }
-                onShowDemo={setDemo}
-              />
-            ))
+            session.entries.map((entry, index) =>
+              !focus || index === focusedIndex ? (
+                <EntryCard
+                  key={entry.id}
+                  entry={entry}
+                  readOnly={readOnly}
+                  sessionId={session.id}
+                  first={index === 0}
+                  last={index === session.entries.length - 1}
+                  onToggle={(set) => toggleDone(entry, set)}
+                  onChange={(setId, patch) => patchSet(entry.id, setId, patch)}
+                  onAddSet={() => addSet(entry)}
+                  onRemoveSet={(setId) => removeSet(entry.id, setId)}
+                  onRemove={() => removeEntry(entry)}
+                  onMoveUp={() => moveEntry(index, -1)}
+                  onMoveDown={() => moveEntry(index, 1)}
+                  onRest={(sec) =>
+                    patchEntries((entries) =>
+                      entries.map((e) => (e.id === entry.id ? { ...e, restSec: sec } : e)),
+                    )
+                  }
+                  onShowDemo={setDemo}
+                />
+              ) : null,
+            )
           )}
 
+          {focus && session.entries.length > 1 ? (
+            <Row>
+              <Button
+                title="Anterior"
+                icon="chevron-back"
+                variant="secondary"
+                disabled={focusedIndex === 0}
+                style={{ flex: 1 }}
+                onPress={() => goTo(focusedIndex - 1)}
+              />
+              <Button
+                title="Siguiente"
+                icon="chevron-forward"
+                variant="secondary"
+                disabled={focusedIndex === session.entries.length - 1}
+                style={{ flex: 1 }}
+                onPress={() => goTo(focusedIndex + 1)}
+              />
+            </Row>
+          ) : null}
           {readOnly ? null : (
             <>
               <Button
@@ -467,9 +551,14 @@ function EntryCard({
     : undefined;
   const previous = lastEntryFor(entry.exerciseId, sessionId);
   const exercise = exerciseById(entry.exerciseId);
+  const { notify } = useDialog();
+  const [options, setOptions] = useState(false);
   const [effort, setEffort] = useState(entry.sets.some((set) => set.rpe != null));
+  const bodyweight = entry.kind === 'strength' && exercise != null && !exercise.equipment?.length;
+  const [addedLoad, setAddedLoad] = useState(entry.sets.some((set) => (set.weightKg ?? 0) > 0));
   const columns = columnsFor(entry.kind, settings.unit).filter(
-    (column) => effort || column.key !== 'rpe',
+    (column) =>
+      (effort || column.key !== 'rpe') && (!bodyweight || addedLoad || column.key !== 'weight'),
   );
 
   const done = entry.sets.filter((s) => s.done).length;
@@ -485,7 +574,7 @@ function EntryCard({
     <Card
       style={{
         gap: Spacing.three,
-        padding: Spacing.three,
+        padding: Spacing.four,
         // El ejercicio terminado se marca con el borde, sin gritar.
         borderColor: complete ? c.accentDim : c.border,
       }}
@@ -496,7 +585,7 @@ function EntryCard({
               sitio donde uno duda de la técnica. */}
           <Pressable onPress={() => (exercise ? onShowDemo(exercise) : null)} disabled={!exercise}>
             <Row gap={Spacing.two}>
-              <Text variant="heading" numberOfLines={1} style={{ flexShrink: 1 }}>
+              <Text variant="title" style={{ flexShrink: 1 }}>
                 {entry.name}
               </Text>
               {exercise && hasDemo(exercise.id) ? (
@@ -517,8 +606,8 @@ function EntryCard({
             </Text>
           ) : null}
           {previous ? (
-            <Text variant="caption" faint numberOfLines={1}>
-              {relativeDay(previous.session.finishedAt!)}:{' '}
+            <Text variant="caption" dim>
+              Última vez ({relativeDay(previous.session.finishedAt!)}):{' '}
               {describeSetRun(previous.entry.sets, previous.entry.kind, settings.unit)}
             </Text>
           ) : (
@@ -529,19 +618,31 @@ function EntryCard({
         </View>
 
         {readOnly ? null : (
-          <Row gap={Spacing.two} style={{ flexShrink: 0 }}>
-            {first ? null : <IconButton name="arrow-up" size={16} onPress={onMoveUp} />}
-            {last ? null : <IconButton name="arrow-down" size={16} onPress={onMoveDown} />}
-            <IconButton
-              name="close"
-              accessibilityLabel={`Quitar ${entry.name}`}
-              size={18}
-              onPress={onRemove}
-            />
-          </Row>
+          <IconButton
+            name="ellipsis-horizontal"
+            accessibilityLabel={`Opciones de ${entry.name}`}
+            onPress={() => setOptions(true)}
+          />
         )}
       </Row>
 
+      {!readOnly && bodyweight ? (
+        <Button
+          title={addedLoad ? 'Registrar solo peso corporal' : 'Añadir lastre'}
+          small
+          variant="ghost"
+          onPress={() => {
+            if (addedLoad && entry.sets.some((set) => (set.weightKg ?? 0) > 0)) {
+              void notify({
+                title: 'Hay peso registrado',
+                message: 'Vacía el peso de las series antes de ocultar la columna de lastre.',
+              });
+              return;
+            }
+            setAddedLoad(!addedLoad);
+          }}
+        />
+      ) : null}
       {!readOnly && entry.kind === 'strength' ? (
         <Pressable
           accessibilityRole="button"
@@ -606,6 +707,8 @@ function EntryCard({
               onPress={onAddSet}
             />
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar descanso"
               onPress={cycleRest}
               style={({ pressed }) => ({
                 flexDirection: 'row',
@@ -628,16 +731,86 @@ function EntryCard({
               </Text>
             </Pressable>
           </Row>
-          {entry.sets.length > 1 ? (
-            <Button
-              title="Quitar última serie"
-              small
-              variant="ghost"
-              onPress={() => onRemoveSet(entry.sets[entry.sets.length - 1].id)}
-            />
-          ) : null}
         </View>
       )}
+      <Sheet visible={options} title={entry.name} onClose={() => setOptions(false)}>
+        {exercise && hasDemo(exercise.id) ? (
+          <Button
+            title="Ver demostración"
+            icon="play-circle-outline"
+            variant="secondary"
+            onPress={() => {
+              setOptions(false);
+              onShowDemo(exercise);
+            }}
+          />
+        ) : null}
+        {exercise?.equipment?.includes('barbell') ? (
+          <Button
+            title="Calcular discos"
+            icon="options-outline"
+            variant="secondary"
+            onPress={() => {
+              setOptions(false);
+              router.push({
+                pathname: '/tools',
+                params: {
+                  weight: String(
+                    entry.sets.find((set) => !set.done)?.weightKg ?? entry.sets[0]?.weightKg ?? 0,
+                  ),
+                },
+              });
+            }}
+          />
+        ) : null}
+        <Text variant="heading">Descanso entre series</Text>
+        <Row style={{ flexWrap: 'wrap' }} gap={8}>
+          {[0, 60, 90, 120, 180, 240].map((seconds) => (
+            <Chip
+              key={seconds}
+              label={seconds ? formatDuration(seconds) : 'Sin descanso'}
+              selected={entry.restSec === seconds}
+              onPress={() => onRest(seconds)}
+            />
+          ))}
+        </Row>
+        <Button
+          title="Mover antes"
+          variant="secondary"
+          disabled={first}
+          onPress={() => {
+            onMoveUp();
+            setOptions(false);
+          }}
+        />
+        <Button
+          title="Mover después"
+          variant="secondary"
+          disabled={last}
+          onPress={() => {
+            onMoveDown();
+            setOptions(false);
+          }}
+        />
+        {entry.sets.length > 1 ? (
+          <Button
+            title="Quitar última serie"
+            variant="ghost"
+            onPress={() => {
+              setOptions(false);
+              onRemoveSet(entry.sets[entry.sets.length - 1].id);
+            }}
+          />
+        ) : null}
+        <Button
+          title="Quitar ejercicio"
+          variant="danger"
+          onPress={() => {
+            setOptions(false);
+            onRemove();
+          }}
+        />
+      </Sheet>
     </Card>
   );
 }

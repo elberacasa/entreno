@@ -28,7 +28,7 @@ export default function WorkoutSummary() {
       <Screen>
         <EmptyState
           title="Este resumen no está disponible"
-          action="Volver a Hoy"
+          action="Volver a Entrenar"
           onAction={() => router.replace('/')}
         />
       </Screen>
@@ -116,11 +116,16 @@ export default function WorkoutSummary() {
           </Text>
         </View>
         <Button
+          title="Ver las series"
+          variant="secondary"
+          onPress={() => router.push(`/session/${session.id}`)}
+        />
+        <Button
           title="Ver mi progreso"
           icon="trending-up"
           onPress={() => router.replace('/progress')}
         />
-        <Button title="Volver a Hoy" variant="secondary" onPress={() => router.replace('/')} />
+        <Button title="Volver a Entrenar" variant="secondary" onPress={() => router.replace('/')} />
       </ScrollView>
     </Screen>
   );

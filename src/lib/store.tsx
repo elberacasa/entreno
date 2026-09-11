@@ -396,7 +396,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
 
       lastEntryFor(exerciseId, excludeSessionId) {
+        const current = sessions.find((session) => session.id === excludeSessionId);
         for (const session of sessions) {
+          if (current && Date.parse(session.startedAt) >= Date.parse(current.startedAt)) continue;
           if (!session.finishedAt) continue;
           if (session.id === excludeSessionId) continue;
           const entry = session.entries.find(

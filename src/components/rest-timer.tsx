@@ -31,7 +31,8 @@ export function useRestTimer(): RestTimer {
 
   // Refrescamos mientras haya una cuenta atrás en marcha.
   const now = useNow(rest != null, 250);
-  const remaining = rest == null ? null : Math.max(0, Math.ceil((rest.endsAt - now) / 1000));
+  const remaining =
+    rest == null ? null : Math.min(rest.total, Math.max(0, Math.ceil((rest.endsAt - now) / 1000)));
 
   const start = useCallback(
     (seconds: number) => {
@@ -76,7 +77,8 @@ function TimerAction({ label, onPress }: { label: string; onPress: () => void })
         justifyContent: 'center',
         backgroundColor: c.surface3,
         opacity: pressed ? 0.7 : 1,
-      })}>
+      })}
+    >
       <Text variant="label" dim>
         {label}
       </Text>
@@ -100,7 +102,8 @@ export function RestTimerBar({ timer }: { timer: RestTimer }) {
         borderColor: done ? c.accent : c.border,
         padding: Spacing.three,
         gap: Spacing.three,
-      }}>
+      }}
+    >
       {/* El final del descanso se anuncia en su propia línea y a tamaño de
           verdad. Va en `text`, no en `accent`: las series ya marcadas también
           son naranjas, así que el color solo no distinguiría nada, y encima el
@@ -116,8 +119,9 @@ export function RestTimerBar({ timer }: { timer: RestTimer }) {
               fontSize: 18,
               fontWeight: '800',
               letterSpacing: 0.6,
-            }}>
-            DESCANSO TERMINADO
+            }}
+          >
+            Descanso terminado
           </Text>
         </Row>
       ) : null}
@@ -152,7 +156,8 @@ export function RestTimerBar({ timer }: { timer: RestTimer }) {
               justifyContent: 'center',
               backgroundColor: c.surface3,
               opacity: pressed ? 0.7 : 1,
-            })}>
+            })}
+          >
             <Ionicons name="close" size={22} color={c.textDim} />
           </Pressable>
         </Row>
