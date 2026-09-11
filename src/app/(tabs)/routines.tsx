@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useDialog } from '@/components/dialog';
+import { WeekSchedule } from '@/components/week-schedule';
 import { SchedulePicker } from '@/components/schedule-picker';
 import {
   Button,
@@ -110,10 +111,25 @@ export default function RoutinesScreen() {
             />
           }
         />
-        <Text dim>Prepara una vez. Llega y entrena.</Text>
+        {store.settings.weeklyPlan ? (
+          <WeekSchedule />
+        ) : (
+          <Card tone="accent" style={{ gap: 12 }}>
+            <Text variant="title">Una semana completa en un toque.</Text>
+            <Text dim>
+              Rutinas por músculos, días de entrenamiento y descanso. Todo queda programado.
+            </Text>
+            <Button
+              title="Crear mi semana"
+              icon="calendar-outline"
+              onPress={() => router.push('/recommended')}
+            />
+          </Card>
+        )}
+        <SectionHeader title="Biblioteca personal" />
         <Row gap={10}>
           <Button
-            title="Nueva rutina"
+            title="Crear a mano"
             icon="add"
             style={{ flex: 1 }}
             onPress={() => router.push('/routine/new')}
@@ -150,8 +166,8 @@ export default function RoutinesScreen() {
                   </View>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Editar ${routine.name}`}
-                    onPress={() => router.push(`/routine/${routine.id}`)}
+                    accessibilityLabel={`Ver ${routine.name}`}
+                    onPress={() => router.push(`/routine-preview/${routine.id}`)}
                     style={{ flex: 1, gap: 5 }}
                   >
                     <Text variant="title">{routine.name}</Text>
@@ -193,10 +209,11 @@ export default function RoutinesScreen() {
             <Card style={{ padding: 24, gap: 12, borderStyle: 'dashed' }}>
               <Text variant="title">Dale forma a tu semana.</Text>
               <Text dim>
-                Crea tu rutina, importa la de un amigo o elige un punto de partida de la biblioteca.
+                Tu semana crea las rutinas automáticamente. También puedes guardar una rutina propia
+                aquí.
               </Text>
               <Button
-                title="Buscar mi primer plan"
+                title="Crear mi semana"
                 variant="secondary"
                 onPress={() => router.push('/recommended')}
               />
@@ -232,8 +249,8 @@ export default function RoutinesScreen() {
         <View style={{ gap: 12 }}>
           <SectionHeader title="Encuentra tu punto de partida" />
           <Discovery
-            title="Plan a tu medida"
-            detail="Según tu experiencia, material y días"
+            title="Configurar mi semana"
+            detail="Reparto por músculos y días de descanso"
             icon="compass-outline"
             onPress={() => router.push('/recommended')}
           />

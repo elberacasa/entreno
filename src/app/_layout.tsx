@@ -60,7 +60,7 @@ function Navigation() {
             name="routine/[id]"
             options={{ title: 'Rutina', headerBackTitle: 'Atrás' }}
           />
-          <Stack.Screen name="recommended" options={{ title: 'Plan recomendado' }} />
+          <Stack.Screen name="recommended" options={{ title: 'Crear mi semana' }} />
           <Stack.Screen name="routine-catalog" options={{ title: 'Catálogo de rutinas' }} />
           <Stack.Screen name="exercises" options={{ title: 'Ejercicios' }} />
           <Stack.Screen name="tools" options={{ title: 'Discos para tu barra' }} />
