@@ -6,7 +6,7 @@ import {
   KEY_LABEL,
   loadAll,
   loadRest,
-  save,
+  saveSnapshot,
   saveRest,
   stashBroken,
   type AppData,
@@ -74,8 +74,11 @@ interface Store extends AppData {
   activeSession: Session | undefined;
   sessionById: (id: string) => Session | undefined;
   startSession: (opts: { routineId?: string | null; name?: string }) => Session;
-  updateSession: (id: string, patch: Partial<Session>) => void;
-  finishSession: (id: string) => void;
+  updateSession: (
+    id: string,
+    patch: Partial<Session> | ((session: Session) => Partial<Session>),
+  ) => void;
+  finishSession: (id: string) => Promise<string | null>;
   deleteSession: (id: string) => void;
 
   /** Última sesión cerrada en la que se hizo ese ejercicio. */
@@ -117,10 +120,6 @@ const FIELD_KEY: { [K in keyof AppData]: StorageKey } = {
   settings: KEYS.settings,
 };
 
-function writeField<K extends keyof AppData>(field: K, value: AppData[K]): Promise<void> {
-  return (save[field] as (v: AppData[K]) => Promise<void>)(value);
-}
-
 /** "los entrenos", "los entrenos y las rutinas", "a, b y c". */
 function joinList(items: string[]): string | null {
   if (items.length === 0) return null;
@@ -144,6 +143,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const dataRef = useRef<AppData>(EMPTY);
   const brokenRef = useRef<StorageKey[]>([]);
+  const replacingRef = useRef(false);
 
   /**
    * Guardar puede fallar -en web esto es localStorage, y Safari lo bloquea o
@@ -152,19 +152,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * Ahora un fallo deja rastro, por clave, para que la app pueda avisar.
    */
   const persist = (key: StorageKey, write: () => Promise<void>): Promise<string | null> => {
-    if (brokenRef.current.includes(key)) {
+    if (brokenRef.current.length > 0) {
       // Ahí hay algo del usuario que no se pudo leer. Escribir encima lo
       // destruiría para siempre, así que no se escribe hasta que él decida.
       return Promise.resolve(KEY_LABEL[key]);
     }
     return write().then(
       () => {
-        setFailedKeys((prev) => {
-          if (!prev[key]) return prev;
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        });
+        setFailedKeys({});
         return null;
       },
       () => {
@@ -201,12 +196,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const saveError = useMemo(
-    () => joinList(Object.values(KEYS).filter((k) => failedKeys[k]).map((k) => KEY_LABEL[k])),
+    () =>
+      joinList(
+        Object.values(KEYS)
+          .filter((k) => failedKeys[k])
+          .map((k) => KEY_LABEL[k]),
+      ),
     [failedKeys],
   );
 
   const readError = useMemo(
-    () => joinList(Object.values(KEYS).filter((k) => broken.includes(k)).map((k) => KEY_LABEL[k])),
+    () =>
+      joinList(
+        Object.values(KEYS)
+          .filter((k) => broken.includes(k))
+          .map((k) => KEY_LABEL[k]),
+      ),
     [broken],
   );
 
@@ -223,10 +228,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       field: K,
       fn: (current: AppData[K]) => AppData[K],
     ): Promise<string | null> => {
+      if (!ready) return Promise.resolve('la carga inicial');
+      if (replacingRef.current) return Promise.resolve('la restauración en curso');
       const next = fn(dataRef.current[field]);
       dataRef.current = { ...dataRef.current, [field]: next };
       setData(dataRef.current);
-      return persist(FIELD_KEY[field], () => writeField(field, next));
+      return persist(FIELD_KEY[field], () => saveSnapshot(dataRef.current));
     };
 
     return {
@@ -241,8 +248,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const keys = brokenRef.current;
         if (keys.length === 0) return null;
         const failed = await stashBroken(keys);
-        brokenRef.current = [];
-        setBroken([]);
+        brokenRef.current = failed;
+        setBroken(failed);
+        if (failed.length === 0) return persist(KEYS.settings, () => saveSnapshot(dataRef.current));
         return joinList(failed.map((k) => KEY_LABEL[k]));
       },
 
@@ -257,9 +265,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return created;
       },
       updateExercise(id, patch) {
-        void mutate('exercises', (list) =>
-          list.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        );
+        void mutate('exercises', (list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
       },
       deleteExercise(id) {
         void mutate('exercises', (list) => list.filter((e) => e.id !== id));
@@ -331,6 +337,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
 
       startSession({ routineId, name }) {
+        const active = dataRef.current.sessions.find((s) => !s.finishedAt);
+        if (active) return active;
         const routine = routineId ? routines.find((r) => r.id === routineId) : undefined;
         const session: Session = {
           id: uid('se-'),
@@ -339,7 +347,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           startedAt: new Date().toISOString(),
           finishedAt: null,
           entries: (routine?.items ?? []).map((item) =>
-            planItemToEntry(item, exercises, settings),
+            planItemToEntry(item, exercises, settings, dataRef.current.sessions),
           ),
         };
         void mutate('sessions', (list) => [session, ...list]);
@@ -347,24 +355,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
       updateSession(id, patch) {
         void mutate('sessions', (list) =>
-          list.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-        );
-      },
-      finishSession(id) {
-        void mutate('sessions', (list) =>
           list.map((s) =>
-            s.id === id
-              ? {
-                  ...s,
-                  finishedAt: new Date().toISOString(),
-                  // Al cerrar descartamos lo que quedó sin marcar como hecho.
-                  entries: s.entries
-                    .map((e) => ({ ...e, sets: e.sets.filter((set) => set.done) }))
-                    .filter((e) => e.sets.length > 0),
-                }
-              : s,
+            s.id === id ? { ...s, ...(typeof patch === 'function' ? patch(s) : patch) } : s,
           ),
         );
+      },
+      async finishSession(id) {
+        if (replacingRef.current) return 'el guardado en curso';
+        const current = dataRef.current;
+        const next = {
+          ...current,
+          sessions: current.sessions.map((session) =>
+            session.id === id
+              ? {
+                  ...session,
+                  finishedAt: new Date().toISOString(),
+                  entries: session.entries
+                    .map((entry) => ({ ...entry, sets: entry.sets.filter((set) => set.done) }))
+                    .filter((entry) => entry.sets.length > 0),
+                }
+              : session,
+          ),
+        };
+        replacingRef.current = true;
+        try {
+          const failed = await persist(KEYS.sessions, () => saveSnapshot(next));
+          if (!failed) {
+            dataRef.current = next;
+            setData(next);
+          }
+          return failed;
+        } finally {
+          replacingRef.current = false;
+        }
       },
       deleteSession(id) {
         void mutate('sessions', (list) => list.filter((s) => s.id !== id));
@@ -387,27 +410,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
 
       async replaceAll(next) {
-        // Restaurar una copia es la decisión del usuario sobre lo que no se
-        // pudo leer: se aparta a una clave de respaldo antes de pisarlo, y a
-        // partir de ahí esas claves vuelven a admitir escrituras.
-        if (brokenRef.current.length > 0) {
-          await stashBroken(brokenRef.current);
+        if (replacingRef.current) return 'la restauración en curso';
+        replacingRef.current = true;
+        try {
+          if (brokenRef.current.length > 0) {
+            const failed = await stashBroken(brokenRef.current);
+            if (failed.length > 0) return joinList(failed.map((k) => KEY_LABEL[k]));
+          }
+          // One storage operation commits the entire restore. On failure,
+          // both the visible data and the saved snapshot remain unchanged.
+          await saveSnapshot(next);
+          dataRef.current = next;
+          setData(next);
           brokenRef.current = [];
           setBroken([]);
+          setFailedKeys({});
+          putRest(null);
+          saveRest(null);
+          return null;
+        } catch {
+          return 'la copia de seguridad';
+        } finally {
+          replacingRef.current = false;
         }
-
-        dataRef.current = next;
-        setData(next);
-
-        const failed = await Promise.all([
-          persist(KEYS.exercises, () => save.exercises(next.exercises)),
-          persist(KEYS.routines, () => save.routines(next.routines)),
-          persist(KEYS.sessions, () => save.sessions(next.sessions)),
-          persist(KEYS.schedule, () => save.schedule(next.schedule)),
-          persist(KEYS.settings, () => save.settings(next.settings)),
-        ]);
-
-        return joinList(failed.filter((f): f is string => f != null));
       },
     };
     // `persist` y `mutate` se apoyan en refs y en setters de estado, que no
@@ -441,9 +466,18 @@ function planItemToEntry(
   item: PlanItem,
   exercises: Exercise[],
   settings: Settings,
+  sessions: Session[],
 ): SessionEntry {
   const exercise = exercises.find((e) => e.id === item.exerciseId);
   const count = Math.max(1, item.sets || 1);
+  const previous = sessions
+    .find(
+      (s) =>
+        s.finishedAt &&
+        s.entries.some((e) => e.exerciseId === item.exerciseId && e.sets.some((set) => set.done)),
+    )
+    ?.entries.find((e) => e.exerciseId === item.exerciseId)
+    ?.sets.filter((set) => set.done);
   return {
     id: uid('en-'),
     exerciseId: item.exerciseId,
@@ -451,7 +485,20 @@ function planItemToEntry(
     kind: exercise?.kind ?? 'strength',
     restSec: item.restSec ?? settings.defaultRestSec,
     notes: item.notes,
-    sets: Array.from({ length: count }, () => makeSet(item)),
+    sets: Array.from({ length: count }, (_, index) => {
+      const last = previous?.[index] ?? previous?.[previous.length - 1];
+      return makeSet(
+        last
+          ? {
+              ...item,
+              weightKg: last.weightKg,
+              reps: last.reps,
+              distanceKm: last.distanceKm,
+              durationSec: last.durationSec,
+            }
+          : item,
+      );
+    }),
   };
 }
 

@@ -61,6 +61,8 @@ function Notice({
   const c = useTheme();
   return (
     <View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
       style={{
         padding: Spacing.three,
         gap: Spacing.two,
@@ -70,7 +72,8 @@ function Notice({
         borderColor: c.accent,
         flexDirection: 'row',
         alignItems: 'flex-start',
-      }}>
+      }}
+    >
       <Ionicons name="warning" size={20} color={c.accent} style={{ marginTop: 2 }} />
       <View style={{ flex: 1, gap: Spacing.two }}>
         {/* 16 y 15 px: es el único sitio de la app donde el texto pequeño

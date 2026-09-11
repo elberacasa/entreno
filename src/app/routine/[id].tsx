@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { useDialog } from '@/components/dialog';
@@ -17,6 +17,8 @@ import {
   setsLabel,
   toDisplayWeight,
 } from '@/lib/format';
+import { clearDraft, readDraft, saveDraft } from '@/lib/routine-draft';
+import { routineSchema } from '@/lib/validation';
 import { uid } from '@/lib/id';
 import { useStore } from '@/lib/store';
 import type { Exercise, PlanItem, Routine } from '@/lib/types';
@@ -30,7 +32,7 @@ export default function RoutineEditorScreen() {
   // copiaría vacía y «Guardar» borraría la rutina de verdad.
   if (!store.ready) return <Screen />;
 
-  return <RoutineEditor id={String(id)} />;
+  return <RoutineEditor key={String(id)} id={String(id)} />;
 }
 
 function RoutineEditor({ id }: { id: string }) {
@@ -39,15 +41,38 @@ function RoutineEditor({ id }: { id: string }) {
   const isNew = id === 'new';
   const existing = isNew ? undefined : store.routineById(id);
 
-  const [draft, setDraft] = useState<Routine>(() => {
+  const [draft, putDraft] = useState<Routine>(() => {
+    const saved = readDraft(id);
+    if (saved && (!existing || Date.parse(saved.updatedAt) >= Date.parse(existing.updatedAt)))
+      return saved;
     if (existing) return { ...existing, items: existing.items.map((i) => ({ ...i })) };
     const now = new Date().toISOString();
     return { id: uid('rt-'), name: '', notes: '', items: [], createdAt: now, updatedAt: now };
   });
+  const [saving, setSaving] = useState(false);
+  const [draftError, setDraftError] = useState(false);
+  const setDraft = (update: SetStateAction<Routine>) => {
+    const next = typeof update === 'function' ? update(draft) : update;
+    const stamped = { ...next, updatedAt: new Date().toISOString() };
+    putDraft(stamped);
+    if (Platform.OS === 'web') setDraftError(!saveDraft(id, stamped));
+  };
+  useEffect(() => {
+    if (!draftError || typeof window === 'undefined') return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [draftError]);
   const [picking, setPicking] = useState(false);
   const [demo, setDemo] = useState<Exercise | null>(null);
 
-  const totalSets = useMemo(() => draft.items.reduce((a, i) => a + (i.sets || 0), 0), [draft.items]);
+  const totalSets = useMemo(
+    () => draft.items.reduce((a, i) => a + (i.sets || 0), 0),
+    [draft.items],
+  );
 
   if (!isNew && !existing) {
     return (
@@ -60,6 +85,7 @@ function RoutineEditor({ id }: { id: string }) {
   const patchItem = (itemId: string, patch: Partial<PlanItem>) =>
     setDraft((d) => ({
       ...d,
+      updatedAt: new Date().toISOString(),
       items: d.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)),
     }));
 
@@ -74,6 +100,7 @@ function RoutineEditor({ id }: { id: string }) {
   };
 
   const save = async () => {
+    if (saving) return;
     const name = draft.name.trim();
     if (!name) {
       await notify({
@@ -86,7 +113,25 @@ function RoutineEditor({ id }: { id: string }) {
       await notify({ title: 'Rutina vacía', message: 'Añade al menos un ejercicio.' });
       return;
     }
-    store.upsertRoutine({ ...draft, name });
+    const checked = routineSchema.safeParse({ ...draft, name });
+    if (!checked.success) {
+      await notify({
+        title: 'Revisa los objetivos',
+        message: 'Usa entre 1 y 100 series y valores positivos para peso, repeticiones y tiempo.',
+      });
+      return;
+    }
+    setSaving(true);
+    const failed = await store.upsertRoutine(checked.data);
+    setSaving(false);
+    if (failed) {
+      await notify({
+        title: 'No se pudo guardar',
+        message: 'Tu borrador sigue aquí. Libera espacio o exporta una copia antes de salir.',
+      });
+      return;
+    }
+    clearDraft(id);
     router.back();
   };
 
@@ -98,6 +143,7 @@ function RoutineEditor({ id }: { id: string }) {
       destructive: true,
     });
     if (!ok) return;
+    clearDraft(id);
     store.deleteRoutine(draft.id);
     router.back();
   };
@@ -109,7 +155,13 @@ function RoutineEditor({ id }: { id: string }) {
           title: isNew ? 'Nueva rutina' : 'Editar rutina',
           headerRight: () => (
             // El padding aparta el texto del borde: sin él la cabecera lo corta.
-            <Pressable onPress={save} hitSlop={8} style={{ paddingHorizontal: Spacing.three }}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={save}
+              hitSlop={8}
+              style={{ paddingHorizontal: Spacing.three }}
+            >
               <Text variant="label" accent>
                 Guardar
               </Text>
@@ -121,10 +173,21 @@ function RoutineEditor({ id }: { id: string }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}>
+        keyboardVerticalOffset={90}
+      >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven }}>
+          contentContainerStyle={{
+            padding: Spacing.four,
+            gap: Spacing.three,
+            paddingBottom: Spacing.seven,
+          }}
+        >
+          <Text variant="caption" danger={draftError} dim={!draftError}>
+            {draftError
+              ? 'El borrador no se ha guardado. Guarda la rutina antes de salir.'
+              : 'Borrador conservado en este dispositivo'}
+          </Text>
           <Card style={{ gap: Spacing.three }}>
             <Field
               label="Nombre"
@@ -179,7 +242,10 @@ function RoutineEditor({ id }: { id: string }) {
                         name="trash-outline"
                         size={18}
                         onPress={() =>
-                          setDraft((d) => ({ ...d, items: d.items.filter((i) => i.id !== item.id) }))
+                          setDraft((d) => ({
+                            ...d,
+                            items: d.items.filter((i) => i.id !== item.id),
+                          }))
                         }
                       />
                     </Row>
@@ -214,7 +280,9 @@ function RoutineEditor({ id }: { id: string }) {
                             const parsed = parseNum(v);
                             patchItem(item.id, {
                               weightKg:
-                                parsed == null ? null : fromDisplayWeight(parsed, store.settings.unit),
+                                parsed == null
+                                  ? null
+                                  : fromDisplayWeight(parsed, store.settings.unit),
                             });
                           }}
                         />
@@ -231,15 +299,21 @@ function RoutineEditor({ id }: { id: string }) {
                         <Field
                           label="Tiempo"
                           placeholder="mm:ss"
-                          defaultValue={item.durationSec != null ? formatDuration(item.durationSec) : ''}
-                          onChangeText={(v) => patchItem(item.id, { durationSec: parseDuration(v) })}
+                          defaultValue={
+                            item.durationSec != null ? formatDuration(item.durationSec) : ''
+                          }
+                          onChangeText={(v) =>
+                            patchItem(item.id, { durationSec: parseDuration(v) })
+                          }
                         />
                       </>
                     ) : (
                       <Field
                         label="Tiempo por serie"
                         placeholder="mm:ss"
-                        defaultValue={item.durationSec != null ? formatDuration(item.durationSec) : ''}
+                        defaultValue={
+                          item.durationSec != null ? formatDuration(item.durationSec) : ''
+                        }
                         onChangeText={(v) => patchItem(item.id, { durationSec: parseDuration(v) })}
                       />
                     )}
@@ -257,8 +331,13 @@ function RoutineEditor({ id }: { id: string }) {
             })
           )}
 
-          <Button title="Añadir ejercicio" icon="add" variant="secondary" onPress={() => setPicking(true)} />
-          <Button title="Guardar rutina" icon="checkmark" onPress={save} />
+          <Button
+            title="Añadir ejercicio"
+            icon="add"
+            variant="secondary"
+            onPress={() => setPicking(true)}
+          />
+          <Button title="Guardar rutina" icon="checkmark" loading={saving} onPress={save} />
           {isNew ? null : <Button title="Borrar rutina" variant="danger" onPress={remove} />}
         </ScrollView>
       </KeyboardAvoidingView>

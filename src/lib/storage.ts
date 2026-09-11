@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { appDataSchema, dataSchemas, snapshotSchema } from '@/lib/validation';
+
 import { LEGACY_SEED_COUNT, SEED_COUNT, SEED_EQUIPMENT, seedExercises } from '@/lib/seed';
 import {
   DEFAULT_SETTINGS,
@@ -9,6 +11,10 @@ import {
   type Session,
   type Settings,
 } from '@/lib/types';
+
+export const SNAPSHOT_KEY = 'wk.data.v2';
+const RECOVERY_KEY = 'wk.recovery.v2';
+let lastSnapshot: string | null | undefined;
 
 export const KEYS = {
   exercises: 'wk.exercises.v1',
@@ -79,63 +85,92 @@ async function readJson<T>(key: StorageKey): Promise<ReadResult<T>> {
 }
 
 export async function loadAll(): Promise<LoadResult> {
-  const [exercises, routines, sessions, schedule, settings] = await Promise.all([
-    readJson<Exercise[]>(KEYS.exercises),
-    readJson<Routine[]>(KEYS.routines),
-    readJson<Session[]>(KEYS.sessions),
-    readJson<ScheduledSession[]>(KEYS.schedule),
-    readJson<Settings>(KEYS.settings),
-  ]);
-
-  const broken: StorageKey[] = [];
-  const value = <T,>(key: StorageKey, read: ReadResult<T>): T | null => {
-    if (read.ok) return read.value;
-    broken.push(key);
-    return null;
+  const allKeys = Object.values(KEYS);
+  const empty: AppData = {
+    exercises: seedExercises(),
+    routines: [],
+    sessions: [],
+    schedule: [],
+    settings: { ...DEFAULT_SETTINGS },
   };
-
-  const storedExercises = value(KEYS.exercises, exercises);
-  const storedSettings = value(KEYS.settings, settings);
-  const merged: Settings = { ...DEFAULT_SETTINGS, ...storedSettings };
-
-  const catalog = storedExercises
-    ? // Ya había catálogo: solo le sumamos los ejercicios incorporados al
-      // catálogo inicial desde la última vez. Los que el usuario haya borrado
-      // no vuelven, porque `seedVersion` ya los da por copiados.
-      addMissing(
-        withEquipment(storedExercises),
-        seedExercises(merged.seedVersion ?? LEGACY_SEED_COUNT),
-      )
-    : // La primera vez no hay nada guardado: sembramos el catálogo entero.
-      seedExercises();
-
-  // La siembra solo se da por hecha si de verdad llegó al disco, y con los
-  // ejercicios delante: `seedVersion` es justo la nota de que ya están
-  // copiados, así que guardarlo antes que ellos los perdería para siempre si
-  // la segunda escritura fallara.
-  const canSeed = !broken.includes(KEYS.exercises) && !broken.includes(KEYS.settings);
-  if (merged.seedVersion !== SEED_COUNT && canSeed) {
-    try {
-      await save.exercises(catalog);
-      merged.seedVersion = SEED_COUNT;
-      await save.settings(merged);
-    } catch {
-      // Si no cuaja se reintenta al próximo arranque; el catálogo ya está en
-      // memoria y `addMissing` evita duplicarlo cuando vuelva a pasar por aquí.
-      merged.seedVersion = storedSettings?.seedVersion;
+  try {
+    const raw = await AsyncStorage.getItem(SNAPSHOT_KEY);
+    lastSnapshot = raw;
+    if (raw != null) {
+      const parsed = snapshotSchema.safeParse(JSON.parse(raw));
+      if (!parsed.success) return { data: empty, broken: allKeys };
+      return { data: prepareCatalog(parsed.data.data), broken: [] };
     }
+  } catch {
+    return { data: empty, broken: allKeys };
   }
 
+  // Read the original keys without modifying them. The first successful save
+  // migrates to one atomic snapshot; the legacy copy remains recoverable.
+  const fields = Object.keys(KEYS) as (keyof AppData)[];
+  const results = await Promise.all(fields.map((field) => readJson<unknown>(KEYS[field])));
+  const data = { ...empty };
+  const broken: StorageKey[] = [];
+  fields.forEach((field, index) => {
+    const result = results[index];
+    if (!result.ok) {
+      broken.push(KEYS[field]);
+      return;
+    }
+    if (result.value == null) return;
+    if (field === 'settings' && (typeof result.value !== 'object' || Array.isArray(result.value))) {
+      broken.push(KEYS[field]);
+      return;
+    }
+    const candidate =
+      field === 'settings'
+        ? { ...DEFAULT_SETTINGS, ...(typeof result.value === 'object' ? result.value : {}) }
+        : result.value;
+    const parsed = dataSchemas[field].safeParse(candidate);
+    if (!parsed.success) {
+      broken.push(KEYS[field]);
+      return;
+    }
+    Object.assign(data, { [field]: parsed.data });
+  });
+  return { data: prepareCatalog(data), broken };
+}
+
+function prepareCatalog(data: AppData): AppData {
   return {
-    data: {
-      exercises: catalog,
-      routines: value(KEYS.routines, routines) ?? [],
-      sessions: value(KEYS.sessions, sessions) ?? [],
-      schedule: value(KEYS.schedule, schedule) ?? [],
-      settings: merged,
-    },
-    broken,
+    ...data,
+    exercises: addMissing(
+      withEquipment(data.exercises),
+      seedExercises(data.settings.seedVersion ?? LEGACY_SEED_COUNT),
+    ),
+    sessions: [...data.sessions].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)),
+    settings: { ...data.settings, seedVersion: SEED_COUNT },
   };
+}
+
+/** Serialize operations so an older asynchronous write cannot win. */
+let pendingWrite: Promise<void> = Promise.resolve();
+export function saveSnapshot(data: AppData): Promise<void> {
+  const payload = JSON.stringify({ version: 2, data });
+  const commit = async () => {
+    const current = await AsyncStorage.getItem(SNAPSHOT_KEY);
+    if (lastSnapshot !== undefined && current !== lastSnapshot) {
+      throw new Error(
+        'Los datos han cambiado en otra pestaña. Exporta los cambios pendientes antes de recargar.',
+      );
+    }
+    await AsyncStorage.setItem(SNAPSHOT_KEY, payload);
+    lastSnapshot = payload;
+  };
+  const next = pendingWrite
+    .catch(() => {})
+    .then(() =>
+      typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('entreno-snapshot', commit)
+        : commit(),
+    );
+  pendingWrite = next;
+  return next;
 }
 
 /**
@@ -155,19 +190,16 @@ function addMissing(list: Exercise[], incoming: Exercise[]): Exercise[] {
  * material, que equivale a "solo peso corporal" y siempre está disponible.
  */
 function withEquipment(list: Exercise[]): Exercise[] {
-  return list.map((e) => (e.equipment ? e : { ...e, equipment: SEED_EQUIPMENT[e.id] ?? [] }));
+  return list.map((e) => ({
+    ...e,
+    equipment: !e.custom && SEED_EQUIPMENT[e.id] ? SEED_EQUIPMENT[e.id] : (e.equipment ?? []),
+  }));
 }
-
-export const save = {
-  exercises: (v: Exercise[]) => AsyncStorage.setItem(KEYS.exercises, JSON.stringify(v)),
-  routines: (v: Routine[]) => AsyncStorage.setItem(KEYS.routines, JSON.stringify(v)),
-  sessions: (v: Session[]) => AsyncStorage.setItem(KEYS.sessions, JSON.stringify(v)),
-  schedule: (v: ScheduledSession[]) => AsyncStorage.setItem(KEYS.schedule, JSON.stringify(v)),
-  settings: (v: Settings) => AsyncStorage.setItem(KEYS.settings, JSON.stringify(v)),
-};
 
 /** Texto crudo de lo que no se pudo leer, para poder enseñárselo al usuario. */
 export async function readBroken(keys: StorageKey[]): Promise<string> {
+  const snapshot = await AsyncStorage.getItem(SNAPSHOT_KEY);
+  if (snapshot != null) return snapshot;
   const parts = await Promise.all(
     keys.map(async (key) => {
       try {
@@ -189,12 +221,22 @@ export async function readBroken(keys: StorageKey[]): Promise<string> {
  * que no existe.
  */
 export async function stashBroken(keys: StorageKey[]): Promise<StorageKey[]> {
+  try {
+    const snapshot = await AsyncStorage.getItem(SNAPSHOT_KEY);
+    if (snapshot != null) {
+      await AsyncStorage.setItem(RECOVERY_KEY, snapshot);
+      // Keep the source until a replacement snapshot has been saved.
+      return [];
+    }
+  } catch {
+    return keys;
+  }
   const failed: StorageKey[] = [];
   for (const key of keys) {
     try {
       const raw = await AsyncStorage.getItem(key);
       if (raw != null) await AsyncStorage.setItem(brokenKeyFor(key), raw);
-      await AsyncStorage.removeItem(key);
+      // Preserve the source as well until a new snapshot supersedes it.
     } catch {
       failed.push(key);
     }
@@ -203,7 +245,17 @@ export async function stashBroken(keys: StorageKey[]): Promise<StorageKey[]> {
 }
 
 export async function wipeAll(): Promise<void> {
-  await AsyncStorage.multiRemove(Object.values(KEYS));
+  await pendingWrite.catch(() => {});
+  const drafts = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith('wk.draft.'));
+  await AsyncStorage.multiRemove([
+    ...drafts,
+    ...Object.values(KEYS),
+    SNAPSHOT_KEY,
+    RECOVERY_KEY,
+    ...Object.values(KEYS).map(brokenKeyFor),
+    'wk.rest.v1',
+  ]);
+  lastSnapshot = null;
 }
 
 export function exportPayload(data: AppData) {
@@ -220,15 +272,16 @@ export function parseBackup(text: string): AppData | null {
   try {
     const raw = JSON.parse(text);
     if (!raw || typeof raw !== 'object') return null;
-    if (!Array.isArray(raw.exercises) || !Array.isArray(raw.sessions)) return null;
-    return {
-      exercises: withEquipment(raw.exercises),
-      routines: Array.isArray(raw.routines) ? raw.routines : [],
-      sessions: raw.sessions,
-      // Las copias hechas antes de la agenda no traen este campo.
-      schedule: Array.isArray(raw.schedule) ? raw.schedule : [],
+    if (raw.app !== 'workout-app' || raw.version !== 1) return null;
+    if (raw.settings != null && (typeof raw.settings !== 'object' || Array.isArray(raw.settings)))
+      return null;
+    const parsed = appDataSchema.safeParse({
+      ...raw,
+      routines: raw.routines ?? [],
+      schedule: raw.schedule ?? [],
       settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },
-    };
+    });
+    return parsed.success ? prepareCatalog(parsed.data) : null;
   } catch {
     return null;
   }
@@ -281,7 +334,9 @@ export async function loadRest(): Promise<RestState | null> {
  */
 export function saveRest(rest: RestState | null): void {
   try {
-    const write = rest ? AsyncStorage.setItem(REST_KEY, JSON.stringify(rest)) : AsyncStorage.removeItem(REST_KEY);
+    const write = rest
+      ? AsyncStorage.setItem(REST_KEY, JSON.stringify(rest))
+      : AsyncStorage.removeItem(REST_KEY);
     void write.catch(() => {});
   } catch {
     // Ni eso: seguimos con la cuenta atrás solo en memoria.

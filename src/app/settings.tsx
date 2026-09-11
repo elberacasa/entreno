@@ -17,7 +17,14 @@ import {
 } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { pickBackup, saveBackup } from '@/lib/backup-file';
-import { formatDuration, num, parseDuration, parseNum } from '@/lib/format';
+import {
+  formatDuration,
+  num,
+  parseDuration,
+  parseNum,
+  fromDisplayWeight,
+  toDisplayWeight,
+} from '@/lib/format';
 import { exportPayload, loadAll, parseBackup, readBroken, wipeAll } from '@/lib/storage';
 import { useStore } from '@/lib/store';
 
@@ -53,6 +60,9 @@ export default function SettingsScreen() {
       setBusy(true);
       const result = await saveBackup(json, `workout-backup-${stamp}.json`);
 
+      if (result === 'downloaded' || result === 'shared') {
+        store.updateSettings({ lastBackupAt: new Date().toISOString() });
+      }
       if (result === 'downloaded') {
         await notify({
           title: 'Copia descargada',
@@ -113,8 +123,8 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
     await notify(
       failed
         ? {
-            title: 'La copia no se guardó entera',
-            message: `Los datos del backup ya se ven en la app, pero falló al guardar ${failed} en el teléfono: si cierras ahora, eso se pierde. Libera espacio y vuelve a importar la copia.`,
+            title: 'No se pudo restaurar la copia',
+            message: `No se pudo guardar ${failed}. Tus datos anteriores siguen intactos. Libera espacio y vuelve a intentarlo.`,
           }
         : { title: 'Copia restaurada', message: 'Tus datos ya son los del backup.' },
     );
@@ -190,8 +200,8 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
     await notify(
       failed
         ? {
-            title: 'Descartado, pero sin respaldo',
-            message: `La app ya vuelve a guardar con normalidad, pero no se pudo apartar lo de ${failed}: si escribes encima, se pierde.`,
+            title: 'No se pudo recuperar el almacenamiento',
+            message: `No se pudo respaldar o guardar ${failed}. Conserva una copia del contenido antes de volver a intentarlo.`,
           }
         : {
             title: 'Descartado',
@@ -247,7 +257,8 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
           gap: Spacing.three,
           paddingBottom: Spacing.seven,
         }}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+      >
         {store.broken.length > 0 ? (
           <>
             <SectionHeader title="Datos que no se pudieron leer" />
@@ -307,7 +318,8 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
             keyboardType="numbers-and-punctuation"
             onChangeText={(v) => {
               const sec = parseDuration(v);
-              if (sec != null) store.updateSettings({ defaultRestSec: sec });
+              if (sec != null && sec >= 0 && sec <= 3600)
+                store.updateSettings({ defaultRestSec: sec });
             }}
             full
           />
@@ -315,13 +327,29 @@ Tampoco pude copiarlo al portapapeles. No tienes copia: inténtalo desde Safari.
             label={`Peso corporal (${settings.unit})`}
             placeholder="Opcional"
             keyboardType="decimal-pad"
-            defaultValue={settings.bodyweightKg != null ? num(settings.bodyweightKg) : ''}
-            onChangeText={(v) => store.updateSettings({ bodyweightKg: parseNum(v) })}
+            key={settings.unit}
+            defaultValue={
+              settings.bodyweightKg != null
+                ? num(toDisplayWeight(settings.bodyweightKg, settings.unit))
+                : ''
+            }
+            onChangeText={(v) => {
+              const value = parseNum(v);
+              if (value == null || value >= 0)
+                store.updateSettings({
+                  bodyweightKg: value == null ? null : fromDisplayWeight(value, settings.unit),
+                });
+            }}
             full
           />
         </Card>
 
         <SectionHeader title="Copia de seguridad" />
+        <Text variant="caption" dim>
+          {settings.lastBackupAt
+            ? `Última exportación: ${new Date(settings.lastBackupAt).toLocaleDateString('es')}`
+            : 'Todavía no has exportado una copia.'}
+        </Text>
         <Card style={{ gap: Spacing.four }}>
           <Text variant="body" dim style={{ lineHeight: 21 }}>
             Todo se guarda solo en este teléfono. Exporta de vez en cuando si no quieres perder el

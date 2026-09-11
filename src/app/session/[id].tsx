@@ -33,6 +33,7 @@ import { useKeepAwake } from '@/hooks/use-keep-awake';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  describePlanned,
   describeSet,
   describeSetRun,
   formatDuration,
@@ -47,6 +48,7 @@ import {
   setsLabel,
   toDisplayWeight,
 } from '@/lib/format';
+import { setError } from '@/lib/workout';
 import { makeEntry, makeSet, useStore } from '@/lib/store';
 import type { Exercise, SessionEntry, SetLog } from '@/lib/types';
 
@@ -89,6 +91,7 @@ export default function SessionScreen() {
   const timer = useRestTimer();
   const { confirm, notify } = useDialog();
   const [picking, setPicking] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [demo, setDemo] = useState<Exercise | null>(null);
 
   const session = store.sessionById(String(id));
@@ -118,7 +121,7 @@ export default function SessionScreen() {
   }
 
   const patchEntries = (fn: (entries: SessionEntry[]) => SessionEntry[]) => {
-    store.updateSession(session.id, { entries: fn(session.entries) });
+    store.updateSession(session.id, (current) => ({ entries: fn(current.entries) }));
   };
 
   const patchSet = (entryId: string, setId: string, patch: Partial<SetLog>) => {
@@ -132,6 +135,11 @@ export default function SessionScreen() {
   };
 
   const toggleDone = (entry: SessionEntry, set: SetLog) => {
+    const error = setError(set, entry.kind);
+    if (!set.done && error) {
+      void notify({ title: 'Revisa esta serie', message: error });
+      return;
+    }
     const next = !set.done;
     patchSet(entry.id, set.id, { done: next });
     if (next && entry.restSec) timer.start(entry.restSec);
@@ -162,7 +170,16 @@ export default function SessionScreen() {
     );
   };
 
-  const removeSet = (entryId: string, setId: string) => {
+  const removeSet = async (entryId: string, setId: string) => {
+    if (
+      !(await confirm({
+        title: 'Quitar serie',
+        message: 'Se quitarán los datos de esta serie.',
+        confirmText: 'Quitar',
+        destructive: true,
+      }))
+    )
+      return;
     patchEntries((entries) =>
       entries.map((e) =>
         e.id === entryId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e,
@@ -191,6 +208,16 @@ export default function SessionScreen() {
   };
 
   const finish = async () => {
+    if (saving) return;
+    for (const entry of session.entries) {
+      for (const set of entry.sets.filter((s) => s.done)) {
+        const error = setError(set, entry.kind);
+        if (error) {
+          await notify({ title: entry.name, message: error });
+          return;
+        }
+      }
+    }
     const done = sessionSetCount(session);
     if (done === 0) {
       await notify({
@@ -206,9 +233,19 @@ export default function SessionScreen() {
       cancelText: 'Seguir entrenando',
     });
     if (!ok) return;
-    store.finishSession(session.id);
+    setSaving(true);
+    const failed = await store.finishSession(session.id);
+    setSaving(false);
+    if (failed) {
+      await notify({
+        title: 'El entreno sigue pendiente de guardar',
+        message:
+          'Conserva la app abierta y exporta una copia desde Ajustes. Tus datos siguen disponibles en esta pantalla.',
+      });
+      return;
+    }
     timer.stop();
-    router.back();
+    router.replace(`/summary/${session.id}`);
   };
 
   const discard = async () => {
@@ -220,6 +257,7 @@ export default function SessionScreen() {
     });
     if (!ok) return;
     store.deleteSession(session.id);
+    timer.stop();
     router.back();
   };
 
@@ -233,7 +271,8 @@ export default function SessionScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}>
+        keyboardVerticalOffset={90}
+      >
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
@@ -241,7 +280,8 @@ export default function SessionScreen() {
             gap: Spacing.three,
             // Deja sitio a la barra fija de abajo.
             paddingBottom: readOnly ? Spacing.seven : 140,
-          }}>
+          }}
+        >
           <Card style={{ gap: Spacing.three }}>
             {readOnly ? (
               <Text variant="title">{session.name}</Text>
@@ -264,11 +304,7 @@ export default function SessionScreen() {
             {/* StatTile reparte el ancho a partes iguales y encoge la cifra si
                 hace falta, así la fila nunca se sale de la tarjeta. */}
             <Row style={{ alignItems: 'flex-start' }} gap={Spacing.three}>
-              <StatTile
-                label="Tiempo"
-                value={formatDuration(elapsed)}
-                accent={!readOnly}
-              />
+              <StatTile label="Tiempo" value={formatDuration(elapsed)} accent={!readOnly} />
               <StatTile label="Series" value={`${doneSets}/${totalSets}`} />
               {sessionVolume(session) > 0 ? (
                 <StatTile
@@ -278,11 +314,7 @@ export default function SessionScreen() {
                 />
               ) : null}
               {sessionDistanceKm(session) > 0 ? (
-                <StatTile
-                  label="Distancia"
-                  value={num(sessionDistanceKm(session), 2)}
-                  unit="km"
-                />
+                <StatTile label="Distancia" value={num(sessionDistanceKm(session), 2)} unit="km" />
               ) : null}
             </Row>
 
@@ -337,7 +369,8 @@ export default function SessionScreen() {
               <Pressable
                 onPress={discard}
                 hitSlop={8}
-                style={{ alignSelf: 'center', padding: Spacing.three }}>
+                style={{ alignSelf: 'center', padding: Spacing.three }}
+              >
                 <Text variant="label" danger>
                   Descartar entreno
                 </Text>
@@ -355,7 +388,8 @@ export default function SessionScreen() {
                 borderTopColor: c.border,
               },
               elevation(3, c.shadow),
-            ]}>
+            ]}
+          >
             <SafeAreaView edges={['bottom']}>
               <View
                 style={{
@@ -363,9 +397,15 @@ export default function SessionScreen() {
                   paddingTop: Spacing.three,
                   paddingBottom: Spacing.three,
                   gap: Spacing.two,
-                }}>
+                }}
+              >
                 <RestTimerBar timer={timer} />
-                <Button title="Terminar entreno" icon="checkmark-done" onPress={finish} />
+                <Button
+                  title="Terminar entreno"
+                  icon="checkmark-done"
+                  loading={saving}
+                  onPress={finish}
+                />
               </View>
             </SafeAreaView>
           </View>
@@ -420,10 +460,17 @@ function EntryCard({
   onShowDemo: (exercise: Exercise) => void;
 }) {
   const c = useTheme();
-  const { exerciseById, lastEntryFor, settings } = useStore();
+  const { exerciseById, lastEntryFor, settings, sessionById, routineById } = useStore();
+  const routineId = sessionById(sessionId)?.routineId;
+  const planned = routineId
+    ? routineById(routineId)?.items.find((item) => item.exerciseId === entry.exerciseId)
+    : undefined;
   const previous = lastEntryFor(entry.exerciseId, sessionId);
   const exercise = exerciseById(entry.exerciseId);
-  const columns = columnsFor(entry.kind, settings.unit);
+  const [effort, setEffort] = useState(entry.sets.some((set) => set.rpe != null));
+  const columns = columnsFor(entry.kind, settings.unit).filter(
+    (column) => effort || column.key !== 'rpe',
+  );
 
   const done = entry.sets.filter((s) => s.done).length;
   const complete = entry.sets.length > 0 && done === entry.sets.length;
@@ -441,14 +488,13 @@ function EntryCard({
         padding: Spacing.three,
         // El ejercicio terminado se marca con el borde, sin gritar.
         borderColor: complete ? c.accentDim : c.border,
-      }}>
+      }}
+    >
       <Row style={{ alignItems: 'flex-start' }}>
         <View style={{ flex: 1, gap: Spacing.half }}>
           {/* Tocar el nombre abre la demostración: entre serie y serie es el
               sitio donde uno duda de la técnica. */}
-          <Pressable
-            onPress={() => (exercise ? onShowDemo(exercise) : null)}
-            disabled={!exercise}>
+          <Pressable onPress={() => (exercise ? onShowDemo(exercise) : null)} disabled={!exercise}>
             <Row gap={Spacing.two}>
               <Text variant="heading" numberOfLines={1} style={{ flexShrink: 1 }}>
                 {entry.name}
@@ -462,6 +508,14 @@ function EntryCard({
               />
             </Row>
           </Pressable>
+          {!readOnly && planned ? (
+            <Text variant="caption" dim>
+              Objetivo: {describePlanned({ ...planned, kind: entry.kind })}
+              {planned.weightKg
+                ? ` · ${num(toDisplayWeight(planned.weightKg, settings.unit))} ${settings.unit}`
+                : ''}
+            </Text>
+          ) : null}
           {previous ? (
             <Text variant="caption" faint numberOfLines={1}>
               {relativeDay(previous.session.finishedAt!)}:{' '}
@@ -469,7 +523,7 @@ function EntryCard({
             </Text>
           ) : (
             <Text variant="caption" faint>
-              Primera vez que lo registras
+              Tu primera referencia empieza hoy
             </Text>
           )}
         </View>
@@ -478,10 +532,27 @@ function EntryCard({
           <Row gap={Spacing.two} style={{ flexShrink: 0 }}>
             {first ? null : <IconButton name="arrow-up" size={16} onPress={onMoveUp} />}
             {last ? null : <IconButton name="arrow-down" size={16} onPress={onMoveDown} />}
-            <IconButton name="close" size={18} onPress={onRemove} />
+            <IconButton
+              name="close"
+              accessibilityLabel={`Quitar ${entry.name}`}
+              size={18}
+              onPress={onRemove}
+            />
           </Row>
         )}
       </Row>
+
+      {!readOnly && entry.kind === 'strength' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={effort ? 'Ocultar esfuerzo' : 'Mostrar esfuerzo opcional'}
+          onPress={() => setEffort(!effort)}
+        >
+          <Text variant="caption" accent>
+            {effort ? 'Ocultar esfuerzo · escala de 1 a 10' : '+ Registrar esfuerzo (opcional)'}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Cabecera de columnas: mismas anchuras que las filas de abajo. En un
           entreno ya cerrado no hay columnas, cada serie va en una línea. */}
@@ -496,7 +567,8 @@ function EntryCard({
               variant="overline"
               faint
               numberOfLines={1}
-              style={{ flex: col.flex, textAlign: 'center' }}>
+              style={{ flex: col.flex, textAlign: 'center' }}
+            >
               {col.label}
             </Text>
           ))}
@@ -507,7 +579,8 @@ function EntryCard({
       <View style={{ gap: Spacing.two }}>
         {entry.sets.map((set, i) => (
           <SetRow
-            key={set.id}
+            key={`${set.id}-${settings.unit}`}
+            exerciseName={entry.name}
             set={set}
             index={i + 1}
             columns={columns}
@@ -522,43 +595,55 @@ function EntryCard({
       </View>
 
       {readOnly ? null : (
-        <Row gap={Spacing.two}>
-          <Button
-            title="Añadir serie"
-            icon="add"
-            variant="secondary"
-            small
-            style={{ flex: 1 }}
-            onPress={onAddSet}
-          />
-          <Pressable
-            onPress={cycleRest}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: Spacing.one + 2,
-              height: 38,
-              paddingHorizontal: Spacing.three,
-              borderRadius: Radius.md,
-              backgroundColor: c.surface2,
-              opacity: pressed ? 0.7 : 1,
-            })}>
-            <Ionicons
-              name="timer-outline"
-              size={15}
-              color={entry.restSec ? c.accent : c.textFaint}
+        <View style={{ gap: 8 }}>
+          <Row gap={Spacing.two}>
+            <Button
+              title="Añadir serie"
+              icon="add"
+              variant="secondary"
+              small
+              style={{ flex: 1 }}
+              onPress={onAddSet}
             />
-            <Text variant="label" dim style={Tabular}>
-              {entry.restSec ? formatDuration(entry.restSec) : 'Sin descanso'}
-            </Text>
-          </Pressable>
-        </Row>
+            <Pressable
+              onPress={cycleRest}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.one + 2,
+                height: 38,
+                paddingHorizontal: Spacing.three,
+                borderRadius: Radius.md,
+                backgroundColor: c.surface2,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons
+                name="timer-outline"
+                size={15}
+                color={entry.restSec ? c.accent : c.textFaint}
+              />
+              <Text variant="label" dim style={Tabular}>
+                {entry.restSec ? formatDuration(entry.restSec) : 'Sin descanso'}
+              </Text>
+            </Pressable>
+          </Row>
+          {entry.sets.length > 1 ? (
+            <Button
+              title="Quitar última serie"
+              small
+              variant="ghost"
+              onPress={() => onRemoveSet(entry.sets[entry.sets.length - 1].id)}
+            />
+          ) : null}
+        </View>
       )}
     </Card>
   );
 }
 
 function SetRow({
+  exerciseName,
   set,
   index,
   columns,
@@ -569,6 +654,7 @@ function SetRow({
   onChange,
   onRemove,
 }: {
+  exerciseName: string;
   set: SetLog;
   index: number;
   columns: Column[];
@@ -580,6 +666,8 @@ function SetRow({
   onRemove: () => void;
 }) {
   const c = useTheme();
+
+  const { notify } = useDialog();
 
   // El texto vive en local para no pelearse con el formateo mientras escribes.
   const [weight, setWeight] = useState(
@@ -604,13 +692,24 @@ function SetRow({
     );
   }
 
-  const state: Record<Column['key'], { value: string; set: (v: string) => void; commit: (v: string) => void; placeholder: string; keyboard: 'decimal-pad' | 'numbers-and-punctuation' }> = {
+  const state: Record<
+    Column['key'],
+    {
+      value: string;
+      set: (v: string) => void;
+      commit: (v: string) => void;
+      placeholder: string;
+      keyboard: 'decimal-pad' | 'numbers-and-punctuation';
+    }
+  > = {
     weight: {
       value: weight,
       set: setWeight,
       commit: (v) => {
         const parsed = parseNum(v);
-        onChange({ weightKg: parsed == null ? null : fromDisplayWeight(parsed, unit) });
+        onChange({
+          weightKg: parsed == null || parsed < 0 ? null : fromDisplayWeight(parsed, unit),
+        });
       },
       // Un guion como marcador: un «0» parecería un valor ya escrito.
       placeholder: '–',
@@ -646,65 +745,123 @@ function SetRow({
     },
   };
 
+  const invalidText = columns.some((col) => {
+    const value = state[col.key].value.trim();
+    if (!value) return false;
+    const parsed = col.key === 'time' ? parseDuration(value) : parseNum(value);
+    return (
+      parsed == null ||
+      parsed < 0 ||
+      (col.key === 'rpe' && (parsed < 1 || parsed > 10)) ||
+      (col.key === 'reps' && !Number.isInteger(parsed))
+    );
+  });
   return (
-    <Row gap={CELL_GAP}>
-      <Pressable onLongPress={onRemove} hitSlop={8} style={{ width: INDEX_W }}>
-        <Text variant="label" faint style={Tabular}>
-          {index}
+    <View style={{ gap: 6 }}>
+      <Row gap={CELL_GAP}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Quitar serie ${index} de ${exerciseName}`}
+          onPress={onRemove}
+          hitSlop={8}
+          style={{ width: INDEX_W }}
+        >
+          <Text variant="label" faint style={Tabular}>
+            {index}
+          </Text>
+        </Pressable>
+
+        {columns.map((col) => {
+          const field = state[col.key];
+          return (
+            <TextInput
+              key={col.key}
+              accessibilityLabel={`${exerciseName}, serie ${index}, ${col.label}`}
+              value={field.value}
+              onChangeText={(v) => {
+                field.set(v);
+                const parsed = col.key === 'time' ? parseDuration(v) : parseNum(v);
+                const invalid =
+                  v.trim() !== '' &&
+                  (parsed == null ||
+                    parsed < 0 ||
+                    (col.key === 'rpe' && (parsed < 1 || parsed > 10)) ||
+                    (col.key === 'reps' && !Number.isInteger(parsed)));
+                field.commit(invalid ? '' : v);
+                if (invalid) onChange({ done: false });
+              }}
+              placeholder={field.placeholder}
+              placeholderTextColor={c.textFaint}
+              keyboardType={field.keyboard}
+              selectTextOnFocus
+              style={{
+                flex: col.flex,
+                // Sin `minWidth: 0` el input no encoge y la fila se sale de la tarjeta.
+                minWidth: 0,
+                height: ROW_H,
+                // La caja se mantiene igual al marcar la serie: solo cambia el
+                // color. Si desapareciera, la fila cambiaría de alto y las
+                // columnas bailarían.
+                backgroundColor: set.done ? c.accentSoft : c.surface2,
+                borderRadius: Radius.md,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: set.done ? c.accentDim : c.border,
+                textAlign: 'center',
+                color: set.done ? c.accent : c.text,
+                fontSize: 16,
+                fontWeight: '700',
+                ...Tabular,
+              }}
+            />
+          );
+        })}
+
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: set.done }}
+          accessibilityLabel={`Completar serie ${index} de ${exerciseName}`}
+          onPress={() => {
+            const invalid = columns.some((col) => {
+              const value = state[col.key].value.trim();
+              if (!value) return false;
+              const parsed = col.key === 'time' ? parseDuration(value) : parseNum(value);
+              return (
+                parsed == null ||
+                parsed < 0 ||
+                (col.key === 'rpe' && (parsed < 1 || parsed > 10)) ||
+                (col.key === 'reps' && !Number.isInteger(parsed))
+              );
+            });
+            if (invalid) {
+              void notify({
+                title: 'Revisa los valores',
+                message:
+                  'Usa valores positivos, repeticiones completas y un esfuerzo entre 1 y 10.',
+              });
+              return;
+            }
+            onToggle();
+          }}
+          style={({ pressed }) => ({
+            width: CHECK_W,
+            height: ROW_H,
+            borderRadius: Radius.md,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: set.done ? c.accent : c.surface2,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: set.done ? c.accent : c.border,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Ionicons name="checkmark" size={20} color={set.done ? c.onAccent : c.textFaint} />
+        </Pressable>
+      </Row>
+      {invalidText ? (
+        <Text variant="caption" danger accessibilityLiveRegion="polite">
+          Revisa los valores: reps completas, esfuerzo de 1 a 10 y ninguna medida negativa.
         </Text>
-      </Pressable>
-
-      {columns.map((col) => {
-        const field = state[col.key];
-        return (
-          <TextInput
-            key={col.key}
-            value={field.value}
-            onChangeText={(v) => {
-              field.set(v);
-              field.commit(v);
-            }}
-            placeholder={field.placeholder}
-            placeholderTextColor={c.textFaint}
-            keyboardType={field.keyboard}
-            selectTextOnFocus
-            style={{
-              flex: col.flex,
-              // Sin `minWidth: 0` el input no encoge y la fila se sale de la tarjeta.
-              minWidth: 0,
-              height: ROW_H,
-              // La caja se mantiene igual al marcar la serie: solo cambia el
-              // color. Si desapareciera, la fila cambiaría de alto y las
-              // columnas bailarían.
-              backgroundColor: set.done ? c.accentSoft : c.surface2,
-              borderRadius: Radius.md,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: set.done ? c.accentDim : c.border,
-              textAlign: 'center',
-              color: set.done ? c.accent : c.text,
-              fontSize: 16,
-              fontWeight: '700',
-              ...Tabular,
-            }}
-          />
-        );
-      })}
-
-      <Pressable
-        onPress={onToggle}
-        style={({ pressed }) => ({
-          width: CHECK_W,
-          height: ROW_H,
-          borderRadius: Radius.md,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: set.done ? c.accent : c.surface2,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: set.done ? c.accent : c.border,
-          opacity: pressed ? 0.7 : 1,
-        })}>
-        <Ionicons name="checkmark" size={20} color={set.done ? c.onAccent : c.textFaint} />
-      </Pressable>
-    </Row>
+      ) : null}
+    </View>
   );
 }
