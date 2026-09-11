@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { uid } from '@/lib/id';
+import { mergeRoutine, type PortableRoutine } from '@/lib/routine-transfer';
 import {
   KEYS,
   KEY_LABEL,
@@ -59,6 +60,7 @@ interface Store extends AppData {
    * una rutina que en realidad vive solo en memoria.
    */
   upsertRoutine: (r: Routine) => Promise<string | null>;
+  importRoutine: (bundle: PortableRoutine) => Promise<string | null>;
   deleteRoutine: (id: string) => void;
   duplicateRoutine: (id: string) => Routine | undefined;
   routineById: (id: string) => Routine | undefined;
@@ -430,6 +432,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           return null;
         } catch {
           return 'la copia de seguridad';
+        } finally {
+          replacingRef.current = false;
+        }
+      },
+
+      async importRoutine(bundle) {
+        if (!ready || replacingRef.current || brokenRef.current.length) return 'el guardado';
+        replacingRef.current = true;
+        try {
+          const next = mergeRoutine(dataRef.current, bundle);
+          const failed = await persist(KEYS.routines, () => saveSnapshot(next));
+          if (!failed) {
+            dataRef.current = next;
+            setData(next);
+          }
+          return failed;
+        } catch {
+          return 'la rutina importada';
         } finally {
           replacingRef.current = false;
         }
