@@ -6,7 +6,8 @@
  * La ruta base sale de `expo.experiments.baseUrl` en app.json, así que no hay
  * que repetirla en ningún otro sitio.
  */
-import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -90,7 +91,7 @@ html = html
   // `viewport-fit=cover` deja pintar bajo la isla dinámica y la barra inferior.
   .replace(
     /<meta name="viewport"[^>]*>/,
-    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />',
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />',
   )
   .replace('</head>', `${head}  </head>`);
 
@@ -105,3 +106,27 @@ await writeFile(join(DIST, '.nojekyll'), '');
 await copyFile(join(DIST, 'index.html'), join(DIST, '404.html'));
 
 console.log(`dist/ listo para publicar en "${base || '/'}"`);
+
+// Precache the production shell and every emitted runtime asset. The build ID
+// includes content so worker updates track HTML, CSS, icons, and JavaScript.
+const files = (await readdir(DIST, { recursive: true, withFileTypes: true }))
+  .filter(
+    (file) =>
+      file.isFile() && !['sw.js', '404.html', '.nojekyll', 'metadata.json'].includes(file.name),
+  )
+  .map((file) =>
+    join(file.parentPath, file.name)
+      .slice(DIST.length + 1)
+      .replaceAll('\\', '/'),
+  )
+  .sort();
+const hash = createHash('sha256');
+for (const file of files) hash.update(await readFile(join(DIST, file)));
+const urls = [
+  `${base}/`,
+  ...files.filter((file) => file !== 'index.html').map((file) => `${base}/${file}`),
+];
+const worker = (await readFile(join(ROOT, 'public/sw.js'), 'utf8'))
+  .replace('__BUILD_ID__', hash.digest('hex').slice(0, 16))
+  .replace('/*__PRECACHE__*/ []', JSON.stringify(urls));
+await writeFile(join(DIST, 'sw.js'), worker);
